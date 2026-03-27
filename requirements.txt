@@ -1,0 +1,12 @@
+fastapi>=0.115
+uvicorn[standard]
+sqlmodel
+sqlalchemy[asyncio]>=2.0
+asyncpg
+redis[asyncio]
+pydantic-settings
+openai-agents
+openai
+httpx
+apscheduler
+python-dotenv
