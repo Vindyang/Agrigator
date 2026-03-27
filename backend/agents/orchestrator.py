@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents import advisory_generator, signal_detector, tools
+from backend.scrapers.tinyfish_client import TinyFishError
 from backend.models.advisory import Advisory, AdvisoryAlertLink, AdvisoryPriceLink, SignalCategory
 from backend.models.alert import AlertRecord
 from backend.models.price import PriceRecord
@@ -49,7 +50,11 @@ async def run(session: AsyncSession, province: str, commodity: str) -> Advisory:
             f"{commodity} gangguan pasokan distribusi",
         ]
         for hop, query in enumerate(hop_queries):
-            results = await tools.search_news(query)
+            try:
+                results = await tools.search_news(query)
+            except TinyFishError:
+                logger.warning("TinyFish unavailable on hop %d — skipping news search", hop + 1)
+                break
             trace.append({"tool": "search_news", "hop": hop + 1, "query": query, "result_count": len(results)})
             news_context.extend(results[:3])
             if len(news_context) >= 3:

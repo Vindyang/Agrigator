@@ -1,9 +1,12 @@
 from openai import AsyncOpenAI
 
-from backend.config import OPENAI_API_KEY
+from backend.config import GROQ_API_KEY
 from backend.models.advisory import SignalCategory
 
-_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+_client = AsyncOpenAI(
+    api_key=GROQ_API_KEY,
+    base_url="https://api.groq.com/openai/v1",
+)
 
 _TRANSLATE_PROMPT = (
     "Translate the following agricultural advisory into Bahasa Indonesia. "
@@ -48,7 +51,7 @@ async def generate_advisory(
     )
 
     resp = await _client.chat.completions.create(
-        model="gpt-4o",
+        model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=300,
@@ -59,7 +62,7 @@ async def generate_advisory(
 async def translate_advisory(text_en: str) -> str:
     """Translate the English advisory into Bahasa Indonesia."""
     resp = await _client.chat.completions.create(
-        model="gpt-4o",
+        model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": _TRANSLATE_PROMPT},
             {"role": "user", "content": text_en},
