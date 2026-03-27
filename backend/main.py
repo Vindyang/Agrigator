@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from backend import cache, scheduler
 from backend.agents import orchestrator
-from backend.database import create_db_and_tables, async_session, get_session
+from backend.database import create_db_and_tables, get_session
 from backend.models.advisory import Advisory
 
 logger = logging.getLogger(__name__)

@@ -21,6 +21,7 @@ async def get_prices(session: AsyncSession, province: str, commodity: str, days:
     records = result.all()
     return [
         {
+            "id": r.id,
             "date": r.date_of_price.isoformat(),
             "price": float(r.price),
             "currency": r.currency,
@@ -33,9 +34,18 @@ async def get_prices(session: AsyncSession, province: str, commodity: str, days:
 
 
 async def get_weather(province: str) -> dict:
-    """Fetch 72h weather forecast for a province (Person B implements scrapers/weather.py)."""
+    """Return cached 72h weather forecast for a province, refreshing from scraper if stale."""
     from backend.scrapers import weather
-    return await weather.get_forecast(province)
+    from backend import cache
+
+    cache_key = f"weather:{province}"
+    cached = await cache.get(cache_key)
+    if cached:
+        return cached
+
+    data = await weather.get_forecast(province)
+    await cache.set(cache_key, data, ttl=3600)  # cache for 1h
+    return data
 
 
 async def get_alerts(session: AsyncSession, province: str, hours: int = 72) -> list[dict]:
@@ -50,6 +60,7 @@ async def get_alerts(session: AsyncSession, province: str, hours: int = 72) -> l
     records = result.all()
     return [
         {
+            "id": r.id,
             "alert_type": r.alert_type,
             "severity": r.severity,
             "pest_name": r.pest_name,

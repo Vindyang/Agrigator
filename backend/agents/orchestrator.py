@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -11,8 +10,6 @@ from backend.models.price import PriceRecord
 from backend import cache
 
 logger = logging.getLogger(__name__)
-
-_MAX_RESEARCH_HOPS = 3
 
 
 async def run(session: AsyncSession, province: str, commodity: str) -> Advisory:
@@ -46,13 +43,17 @@ async def run(session: AsyncSession, province: str, commodity: str) -> Advisory:
     # --- Step 3: Causal research loop (up to 3 hops if anomaly detected) ---
     news_context: list[dict] = []
     if is_anomaly:
-        for hop in range(_MAX_RESEARCH_HOPS):
-            query = f"{commodity} {province} harga naik penyebab"
+        hop_queries = [
+            f"{commodity} {province} harga naik penyebab",
+            f"{commodity} Indonesia kenaikan harga",
+            f"{commodity} gangguan pasokan distribusi",
+        ]
+        for hop, query in enumerate(hop_queries):
             results = await tools.search_news(query)
             trace.append({"tool": "search_news", "hop": hop + 1, "query": query, "result_count": len(results)})
             news_context.extend(results[:3])
-            if results:
-                break   # found context, stop searching
+            if len(news_context) >= 3:
+                break   # enough context collected
 
     # --- Step 4: Compound signal evaluation ---
     price_anomalies = [(is_anomaly, pct_change)]

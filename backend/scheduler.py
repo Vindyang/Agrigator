@@ -19,7 +19,8 @@ _TARGETS = [
 scheduler = AsyncIOScheduler()
 
 
-async def _run_all_targets() -> None:
+async def _run_agent() -> None:
+    """Full orchestrator loop — runs every 6h when new price data is available."""
     async with async_session() as session:
         for province, commodity in _TARGETS:
             try:
@@ -28,9 +29,23 @@ async def _run_all_targets() -> None:
                 logger.exception("Agent run failed for %s / %s", province, commodity)
 
 
+async def _refresh_weather() -> None:
+    """Refresh weather cache only — no GPT-4o call, runs every 1h."""
+    from backend.scrapers import weather
+    from backend import cache
+
+    provinces = {province for province, _ in _TARGETS}
+    for province in provinces:
+        try:
+            data = await weather.get_forecast(province)
+            await cache.set(f"weather:{province}", data, ttl=3600)
+        except Exception:
+            logger.exception("Weather refresh failed for %s", province)
+
+
 def start() -> None:
-    scheduler.add_job(_run_all_targets, "interval", hours=6, id="price_agent_run")
-    scheduler.add_job(_run_all_targets, "interval", hours=1, id="weather_refresh")
+    scheduler.add_job(_run_agent, "interval", hours=6, id="price_agent_run")
+    scheduler.add_job(_refresh_weather, "interval", hours=1, id="weather_refresh")
     scheduler.start()
     logger.info("Scheduler started")
 
