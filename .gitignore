@@ -47,3 +47,14 @@ next-env.d.ts
 
 #tinyfish
 tinyfish*
+
+# python
+**/.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+htmlcov/
+.mypy_cache/
+
+tempfix.md
