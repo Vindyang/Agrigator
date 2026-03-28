@@ -6,6 +6,7 @@ import {
   ServerCrash, Cloud, ThumbsUp, ThumbsDown, ChevronDown, 
   ChevronRight, ExternalLink 
 } from "lucide-react";
+import { RawMaterialCharts } from "@/components/RawMaterialCharts";
 
 // --- Types ---
 type SignalCategory = "URGENT_ACTION" | "OPPORTUNITY" | "MONITOR" | "HOLD";
@@ -326,20 +327,35 @@ export default function AgriSentinelDashboard() {
       <main className="flex-1 flex flex-col h-full bg-[#FAFAFA] pt-16 lg:pt-0 relative overflow-hidden">
         
         {/* Feed Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-3 shrink-0 shadow-sm z-10">
-          <h2 className="text-xl font-extrabold text-[#2D3748]">Latest Advisories</h2>
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shrink-0 shadow-sm z-10 gap-4">
+          <div className="flex flex-col">
+            <h2 className="text-xl font-extrabold text-[#2D3748] mb-1">Market Overview</h2>
+            <p className="text-sm font-medium text-gray-500">Live commodity tracking</p>
+          </div>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-100 border border-green-200">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
             </span>
-            <span className="text-[10px] font-bold text-green-700 uppercase tracking-widest">Live</span>
+            <span className="text-[10px] font-bold text-green-700 uppercase tracking-widest">Live Feed</span>
           </div>
         </div>
 
         {/* Scrollable Feed */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 hide-scrollbar">
-          <div className="max-w-3xl mx-auto flex flex-col gap-6 pb-12">
+          <div className="max-w-4xl mx-auto flex flex-col pb-12">
+            
+            {/* Raw Material Charts Section */}
+            <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+              <RawMaterialCharts />
+            </div>
+
+            <div className="flex items-center gap-2 mb-6">
+              <Globe className="w-5 h-5 text-[#2F5233]" />
+              <h2 className="text-xl font-extrabold text-[#2D3748]">Regional Advisories</h2>
+            </div>
+            
+            <div className="flex flex-col gap-6">
             {filteredAdvisories.map((advisory) => (
               <AdvisoryCardUI 
                 key={advisory.id} 
@@ -353,6 +369,7 @@ export default function AgriSentinelDashboard() {
                 <p className="font-medium text-lg">No advisories for this province.</p>
               </div>
             )}
+            </div>
           </div>
         </div>
       </main>

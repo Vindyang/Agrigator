@@ -3,6 +3,7 @@ import { AdvisoryCard, Advisory } from "./AdvisoryCard";
 import { TickerTape } from "./TickerTape";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sprout } from "lucide-react";
+import { RawMaterialCharts } from "./RawMaterialCharts";
 
 interface ChatFeedProps {
   advisories: Advisory[];
@@ -47,6 +48,20 @@ export function ChatFeed({ advisories, onFeedback, selectedProvince }: ChatFeedP
           </div>
         )}
       </div>
+
+      <div className="flex-1 p-8 bg-gray-50 overflow-y-auto">
+  <h1 className="text-2xl font-bold text-gray-900 mb-6">Market Overview</h1>
+  
+  {/* The 4 Raw Material Charts go here */}
+  <RawMaterialCharts />
+
+  <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">Regional Intelligence Feed</h2>
+  
+  {/* Your AI AdvisoryCards go here */}
+  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      {/* <AdvisoryCard /> */}
+  </div>
+</div>
 
       {/* 3. Main Scrollable Feed Area */}
       <ScrollArea className="flex-1 p-4 md:p-6 bg-muted/10 h-full">
