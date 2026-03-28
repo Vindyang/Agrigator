@@ -1,154 +1,137 @@
 """
-KEMENDAG wholesale market price scraper.
+SP2KP (KEMENDAG) wholesale price scraper.
 
-Source: Kementerian Perdagangan (Ministry of Trade) commodity price monitoring portal.
-URL: https://www.kemendag.go.id/id/harga-pangan
+Source: https://sp2kp.kemendag.go.id
+API: https://api-sp2kp.kemendag.go.id/report/api/hnt
+     (Harga Nasional Tertimbang — no auth required)
 
-Uses TinyFish extract_table to handle the JS-rendered price table.
+No TinyFish needed — the HNT endpoint returns JSON directly.
 Returns validated PriceRecord models — never raw dicts.
 """
 
 import logging
 from datetime import date, datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
+
+import httpx
 
 from backend.models.price import PriceLevel, PriceRecord
-from backend.scrapers.tinyfish_client import TinyFishClient, TinyFishError
 
 logger = logging.getLogger(__name__)
 
-SOURCE_URL = "https://www.kemendag.go.id/id/harga-pangan"
+SOURCE_URL = "https://sp2kp.kemendag.go.id"
+_HNT_API = "https://api-sp2kp.kemendag.go.id/report/api/hnt"
+_LATEST_DATE_API = "https://api-sp2kp.kemendag.go.id/report/api/latest-price-dates"
 
-# Explicit, step-by-step goal following TinyFish prompting best practices.
-# Key elements: wait instruction, visual element descriptions, exact JSON schema with examples.
-_EXTRACTION_GOAL = """
-Extract commodity price data from this Indonesian government price monitoring page.
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://sp2kp.kemendag.go.id/",
+}
 
-IMPORTANT: This page is rendered by JavaScript. Wait for the price data table to fully load
-before extracting — it may take several seconds to appear. If a loading spinner or skeleton
-rows are visible, wait for them to disappear before proceeding.
-
-Steps:
-1. If a cookie consent, language selection, or privacy notice dialog appears, dismiss it first.
-2. Look for the main price table in the center of the page showing food commodity prices.
-3. For each visible row in the table, extract the following fields:
-   - commodity: the food item name exactly as shown (e.g. "Beras Medium", "Cabai Merah Keriting")
-   - price: the price as a plain number in IDR with no currency symbol (e.g. 12500)
-   - unit: the unit of measurement (e.g. "per kg", "per liter")
-   - city: the city or market name shown in the row
-   - province: the province name shown in the row
-   - date: the date of the price record as shown
-
-Do NOT click any pagination — extract only the currently visible rows.
-Stop when all visible rows are extracted.
-
-If the table has no data or fails to load, return {"rows": []}.
-If a CAPTCHA appears, return {"rows": [], "error": "captcha_encountered"}.
-
-Return as JSON exactly matching this structure:
-{"rows": [{"commodity": "Beras Medium", "price": 12500, "unit": "per kg", "city": "Bandung", "province": "Jawa Barat", "date": "25/03/2025"}]}
-"""
-
-# Map raw KEMENDAG commodity names → normalised internal names
-_COMMODITY_MAP: dict[str, str] = {
-    "beras medium": "beras",
-    "beras premium": "beras",
-    "beras": "beras",
-    "cabai merah keriting": "cabai",
-    "cabai merah besar": "cabai",
-    "cabai rawit merah": "cabai",
-    "cabai": "cabai",
-    "jagung": "jagung",
-    "kedelai": "kedelai",
-    "minyak goreng curah": "minyak_goreng",
-    "minyak goreng kemasan": "minyak_goreng",
-    "minyak goreng": "minyak_goreng",
-    "telur ayam ras": "telur",
-    "telur ayam": "telur",
-    "bawang merah": "bawang_merah",
-    "bawang putih": "bawang_putih",
-    "gula pasir": "gula",
-    "daging sapi": "daging_sapi",
-    "daging ayam": "daging_ayam",
+# komoditas_id → internal name (from /master/api/komoditas)
+_KOMODITAS_MAP: dict[int, str] = {
+    1: "beras",
+    2: "gula",
+    3: "minyak_goreng",
+    4: "daging_sapi",
+    5: "daging_ayam",
+    6: "telur",
+    8: "jagung",
+    10: "kedelai",
+    11: "cabai",
+    12: "bawang_merah",
 }
 
 
-def _normalise_commodity(raw: str) -> str:
-    key = raw.strip().lower()
-    for pattern, name in _COMMODITY_MAP.items():
-        if pattern in key:
-            return name
-    return key.replace(" ", "_")
-
-
-def _parse_price(raw: object) -> Decimal | None:
-    """Convert raw price value (string or number) to Decimal. Returns None on failure."""
+async def _get_latest_tanggal(client: httpx.AsyncClient) -> str:
+    """Fetch the most recent date that has price data."""
     try:
-        # Strip common Indonesian formatting: dots as thousands separator, commas as decimal
-        cleaned = str(raw).replace("Rp", "").replace(".", "").replace(",", ".").strip()
-        return Decimal(cleaned)
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def _parse_date(raw: object) -> date:
-    """Parse date string to date, falling back to today."""
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d %b %Y"):
-        try:
-            return datetime.strptime(str(raw).strip(), fmt).date()
-        except ValueError:
-            continue
-    return date.today()
+        r = await client.get(
+            _LATEST_DATE_API,
+            params={"tipe_komoditas_id": 1},
+            timeout=10,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data["data"]["tanggal"]
+    except Exception:
+        # Fallback to yesterday
+        from datetime import timedelta
+        return (date.today() - timedelta(days=1)).isoformat()
 
 
 async def scrape_kemendag_prices(province: str) -> list[PriceRecord]:
     """
-    Scrape wholesale commodity prices from KEMENDAG for the given province.
+    Fetch national weighted average (HNT) food commodity prices from SP2KP.
 
-    Returns an empty list (not an exception) if the scrape fails, so the
-    agent loop can continue with whatever data is already in the DB.
+    HNT is a national-level price — province arg is kept for API compatibility
+    (agent loop expects province-scoped records; we tag all records with it).
+
+    Returns [] on failure so the agent loop continues with DB-cached prices.
     """
-    client = TinyFishClient()
     try:
-        rows = await client.extract_table(
-            SOURCE_URL,
-            schema={},
-            goal_override=_EXTRACTION_GOAL,
-            browser_profile="stealth",
-            proxy_country="US",
-        )
-    except TinyFishError as exc:
+        async with httpx.AsyncClient(headers=_HEADERS, follow_redirects=True) as client:
+            tanggal = await _get_latest_tanggal(client)
+            logger.info("KEMENDAG: fetching HNT prices for %s", tanggal)
+
+            r = await client.get(
+                _HNT_API,
+                params={"tanggal": tanggal},
+                timeout=15,
+            )
+            r.raise_for_status()
+            items = r.json().get("data", [])
+
+    except Exception as exc:
         logger.warning("KEMENDAG scrape failed: %s", exc)
         return []
 
     now = datetime.now(timezone.utc)
     records: list[PriceRecord] = []
+    seen_komoditas: set[int] = set()
 
-    for row in rows:
-        row_province: str = str(row.get("province", "")).strip()
-
-        # Filter to the requested province (case-insensitive partial match)
-        if province.lower() not in row_province.lower():
+    for item in items:
+        komoditas_id: int = item.get("komoditas_id", 0)
+        if komoditas_id not in _KOMODITAS_MAP:
+            continue
+        if komoditas_id in seen_komoditas:
             continue
 
-        price_val = _parse_price(row.get("price"))
-        if price_val is None or price_val <= 0:
+        # Prefer hnt_penduduk (population-weighted), fall back to hnt_sbh
+        price_raw = item.get("hnt_penduduk") or item.get("hnt_sbh")
+        if not price_raw:
             continue
+
+        try:
+            price = Decimal(str(price_raw)).quantize(Decimal("1"))
+        except Exception:
+            continue
+
+        seen_komoditas.add(komoditas_id)
+
+        try:
+            price_date = date.fromisoformat(item.get("tanggal", tanggal))
+        except ValueError:
+            price_date = date.today()
 
         records.append(
             PriceRecord(
-                commodity=_normalise_commodity(str(row.get("commodity", ""))),
-                province=row_province or province,
-                city=str(row.get("city", province)).strip() or province,
-                price=price_val,
+                commodity=_KOMODITAS_MAP[komoditas_id],
+                province=province,
+                city=province,
+                price=price,
                 currency="IDR",
-                unit=str(row.get("unit", "per kg")).strip() or "per kg",
+                unit="per kg",
                 price_level=PriceLevel.wholesale,
                 source_url=SOURCE_URL,
                 scraped_at=now,
-                date_of_price=_parse_date(row.get("date")),
+                date_of_price=price_date,
             )
         )
 
-    logger.info("KEMENDAG: scraped %d price records for %s", len(records), province)
+    logger.info("KEMENDAG: %d HNT price records for %s (%s)", len(records), province, tanggal)
     return records

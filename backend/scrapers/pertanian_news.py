@@ -3,8 +3,7 @@ Kementan (Ministry of Agriculture) news scraper.
 
 Source: pertanian.go.id/?show=news&act=view_all&cat=2
 
-Uses plain httpx + BeautifulSoup (~1s). The page is server-rendered HTML — no
-browser automation needed. TinyFish is not used here.
+Uses plain httpx + BeautifulSoup (~1s). The page is server-rendered HTML.
 
 Return shape: [{"title": str, "url": str, "snippet": str, "published_at": str | None}]
 """
@@ -14,7 +13,6 @@ import re
 
 import httpx
 from bs4 import BeautifulSoup
-
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +40,12 @@ def _resolve_url(href: str) -> str:
 
 
 def _parse_html(html: str) -> list[dict]:
-    """Extract news article links from page HTML.
+    """
+    Extract news articles from page HTML.
 
-    Article URLs on pertanian.go.id follow the pattern:
-        ?show=news&act=view&id=XXXX
-    Each article appears twice (image link + text link) — deduplicated via `seen`.
+    Article URLs follow: ?show=news&act=view&id=XXXX
+    Each appears twice (image link + text link) — skip empty-title ones first.
+    Snippet lives in div.media-body as text outside the h5.media-heading.
     """
     soup = BeautifulSoup(html, "html.parser")
     seen: set[str] = set()
@@ -54,21 +53,19 @@ def _parse_html(html: str) -> list[dict]:
 
     for a in soup.find_all("a", href=True):
         href: str = a["href"]
-
-        # Only article links
         if "show=news" not in href or "act=view" not in href or "id=" not in href:
             continue
 
         title = a.get_text(separator=" ", strip=True)
         if not title:
-            continue  # skip image/thumbnail links — don't add to seen yet
+            continue  # image/thumbnail link — skip without adding to seen
 
         url = _resolve_url(href)
         if url in seen:
             continue
         seen.add(url)
 
-        # Snippet lives in grandparent (div.media-body) as text outside the <h5>
+        # Snippet is text in div.media-body outside the h5 heading (grandparent)
         grandparent = a.parent.parent if a.parent and a.parent.parent else None
         if grandparent:
             full_text = grandparent.get_text(separator=" ", strip=True)
@@ -77,7 +74,6 @@ def _parse_html(html: str) -> list[dict]:
             snippet = ""
 
         date_match = _DATE_RE.search(snippet)
-
         articles.append({
             "title": title,
             "url": url,
@@ -91,32 +87,6 @@ def _parse_html(html: str) -> list[dict]:
     return articles
 
 
-async def scrape_pertanian_news(query: str = "") -> list[dict]:
-    """
-    Fetch Kementan news articles via direct httpx GET (server-rendered HTML).
-
-    For causal research (query provided), filters articles by keyword match.
-    Returns [] on failure — the agent loop must tolerate missing news context.
-    """
-    try:
-        async with httpx.AsyncClient(timeout=15.0, headers=_HEADERS, follow_redirects=True) as client:
-            response = await client.get(PERTANIAN_NEWS_URL)
-            response.raise_for_status()
-            html = response.text
-
-        soup = BeautifulSoup(html, "html.parser")
-        all_links = soup.find_all("a", href=True)
-        logger.debug("Pertanian news: %d total links on page", len(all_links))
-
-        articles = _parse_html(html)
-        logger.info("Pertanian news: %d articles found", len(articles))
-        return _filter(articles, query)
-
-    except Exception as exc:
-        logger.warning("Pertanian news fetch failed: %s", exc)
-        return []
-
-
 def _filter(articles: list[dict], query: str) -> list[dict]:
     if not query:
         return articles
@@ -125,3 +95,22 @@ def _filter(articles: list[dict], query: str) -> list[dict]:
         a for a in articles
         if any(kw in (a["title"] + a["snippet"]).lower() for kw in keywords)
     ]
+
+
+async def scrape_pertanian_news(query: str = "") -> list[dict]:
+    """
+    Fetch Kementan news articles.
+
+    If query is provided (agent research loop), filters by keyword match.
+    Returns [] on failure — agent loop must tolerate missing news context.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0, headers=_HEADERS, follow_redirects=True) as client:
+            response = await client.get(PERTANIAN_NEWS_URL)
+            response.raise_for_status()
+        articles = _parse_html(response.text)
+        logger.info("Pertanian news: %d articles found", len(articles))
+        return _filter(articles, query)
+    except Exception as exc:
+        logger.warning("Pertanian news fetch failed: %s", exc)
+        return []
