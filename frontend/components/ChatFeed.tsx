@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
 import { AdvisoryCard, Advisory } from "./AdvisoryCard";
 import { TickerTape } from "./TickerTape";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from "./ui/scroll-area";
 import { Sprout } from "lucide-react";
 import { RawMaterialCharts } from "./RawMaterialCharts";
 

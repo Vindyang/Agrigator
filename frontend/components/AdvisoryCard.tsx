@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "./ui/badge";
+import { Card, CardContent, CardFooter } from "./ui/card";
+import { Progress } from "./ui/progress";
+import { Button } from "./ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { ThumbsUp, ThumbsDown, ChevronRight, ChevronDown, ExternalLink } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 
@@ -128,13 +128,17 @@ export function AdvisoryCard({ advisory, onFeedback }: AdvisoryCardProps) {
                 <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Price Trend</span>
                 <span className="text-sm font-medium">{advisory.signals.price.text}</span>
               </div>
-              <div className="w-24 h-8 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={advisory.signals.price.history}>
-                    <YAxis domain={['auto', 'auto']} hide />
-                    <Line type="monotone" dataKey="value" stroke="currentColor" className="text-foreground" strokeWidth={2} dot={false} isAnimationActive={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="w-24 min-w-24 h-8 min-h-8 shrink-0">
+                {signalsOpen ? (
+                  <ResponsiveContainer width="100%" height="100%" minWidth={96} minHeight={32}>
+                    <LineChart data={advisory.signals.price.history}>
+                      <YAxis domain={['auto', 'auto']} hide />
+                      <Line type="monotone" dataKey="value" stroke="currentColor" className="text-foreground" strokeWidth={2} dot={false} isAnimationActive={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full" />
+                )}
               </div>
             </div>
             

@@ -1,6 +1,6 @@
 import React from 'react';
-import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // shadcn
+import { AreaChart, Area, YAxis } from 'recharts';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card'; // shadcn
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
 // Mock 7-day data for the Indonesian raw materials (Prices in IDR)
@@ -43,7 +43,7 @@ export const RawMaterialCharts = () => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full mb-6">
       {materials.map((item) => (
-        <Card key={item.name} className="overflow-hidden bg-white border-gray-200 shadow-sm flex flex-col">
+        <Card key={item.name} className="overflow-hidden bg-white border-gray-200 shadow-sm flex flex-col min-w-0">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">{item.name}</CardTitle>
             <div className="flex items-baseline justify-between mt-1">
@@ -54,32 +54,60 @@ export const RawMaterialCharts = () => {
               </span>
             </div>
           </CardHeader>
-          <CardContent className="p-0 flex-grow mt-2">
-            <div className="h-[80px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={item.data} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id={`gradient-${item.name}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={item.color} stopOpacity={0.2} />
-                      <stop offset="95%" stopColor={item.color} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  {/* Hide Y-axis but scale it dynamically so the line looks dramatic */}
-                  <YAxis domain={['dataMin', 'dataMax']} hide />
-                  <Area
-                    type="monotone"
-                    dataKey="v"
-                    stroke={item.color}
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill={`url(#gradient-${item.name})`}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+          <CardContent className="p-0 flex-grow mt-2 min-w-0">
+            <MaterialSparkline item={item} />
           </CardContent>
         </Card>
       ))}
     </div>
   );
 };
+
+function MaterialSparkline({ item }: { item: typeof materials[number] }) {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = React.useState({ width: 0, height: 80 });
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const updateSize = () => {
+      const nextWidth = Math.max(0, Math.floor(el.clientWidth));
+      const nextHeight = Math.max(0, Math.floor(el.clientHeight));
+      setSize({ width: nextWidth, height: nextHeight });
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => updateSize());
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className="h-[80px] min-h-[80px] w-full min-w-0">
+      {size.width > 0 && size.height > 0 ? (
+        <AreaChart width={size.width} height={size.height} data={item.data} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={`gradient-${item.name}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={item.color} stopOpacity={0.2} />
+              <stop offset="95%" stopColor={item.color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <YAxis domain={['dataMin', 'dataMax']} hide />
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={item.color}
+            strokeWidth={2}
+            fillOpacity={1}
+            fill={`url(#gradient-${item.name})`}
+          />
+        </AreaChart>
+      ) : (
+        <div className="h-full w-full" />
+      )}
+    </div>
+  );
+}

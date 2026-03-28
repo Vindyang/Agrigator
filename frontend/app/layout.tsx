@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Nunito_Sans, Noto_Sans } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+
+const notoSansHeading = Noto_Sans({subsets:['latin'],variable:'--font-heading'});
+
+const nunitoSans = Nunito_Sans({subsets:['latin'],variable:'--font-sans'});
 
 const interSans = Inter({
   variable: "--font-inter-sans",
@@ -25,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${interSans.variable} ${jbMono.variable} h-full antialiased`}
+      className={cn("h-full", "antialiased", interSans.variable, jbMono.variable, "font-sans", nunitoSans.variable, notoSansHeading.variable)}
     >
       <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>

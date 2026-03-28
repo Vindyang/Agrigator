@@ -6,7 +6,7 @@ import {
   ServerCrash, Cloud, ThumbsUp, ThumbsDown, ChevronDown, 
   ChevronRight, ExternalLink 
 } from "lucide-react";
-import { RawMaterialCharts } from "@/components/RawMaterialCharts";
+import { RawMaterialCharts } from "../components/RawMaterialCharts";
 
 // --- Types ---
 type SignalCategory = "URGENT_ACTION" | "OPPORTUNITY" | "MONITOR" | "HOLD";
