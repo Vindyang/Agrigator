@@ -43,12 +43,12 @@ export const RawMaterialCharts = () => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full mb-6">
       {materials.map((item) => (
-        <Card key={item.name} className="overflow-hidden bg-white border-gray-200 shadow-sm flex flex-col min-w-0">
+        <Card key={item.name} className="overflow-hidden bg-card border-border shadow-sm flex flex-col min-w-0">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">{item.name}</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{item.name}</CardTitle>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-2xl font-bold text-gray-900">{item.price}</span>
-              <span className={`flex items-center text-sm font-semibold ${item.isUp ? 'text-red-500' : 'text-green-500'}`}>
+              <span className="text-2xl font-bold text-foreground">{item.price}</span>
+              <span className={`flex items-center text-sm font-semibold ${item.isUp ? 'text-destructive' : 'text-success'}`}>
                 {item.isUp ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
                 {item.trend}
               </span>

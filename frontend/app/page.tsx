@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { 
   Menu, Globe, Activity, Clock, Loader2, CheckCircle2, 
   ServerCrash, Cloud, ThumbsUp, ThumbsDown, ChevronDown, 
-  ChevronRight, ExternalLink 
+  ChevronRight, ExternalLink, Database, CloudRainWind, Bug, Languages, MessageSquareText, PhoneCall, ShieldAlert
 } from "lucide-react";
 import { RawMaterialCharts } from "../components/RawMaterialCharts";
 
@@ -103,20 +103,54 @@ const CYCLING_STEPS = [
   "Generating advisory...",
 ];
 
+const FEATURE_PILLARS = [
+  {
+    title: "Multi-source Monitoring",
+    desc: "PIHPS/BPS/Kementan prices + BMKG weather + BBPOPT/IPPC alerts.",
+    icon: Database,
+  },
+  {
+    title: "Compound Signal Reasoning",
+    desc: "Price delta + weather + pest signals are fused into one decision.",
+    icon: ShieldAlert,
+  },
+  {
+    title: "Bilingual Advisory Output",
+    desc: "Every advisory is generated in English and localized to Bahasa Indonesia.",
+    icon: Languages,
+  },
+];
+
+const AGENT_FLOW = [
+  "1. Scheduler trigger (timed or on-demand run)",
+  "2. Parallel data collection from all configured sources",
+  "3. Delta analysis against 7-day baseline",
+  "4. Causal research loop when anomalies are unclear",
+  "5. Compound signal evaluation (URGENT_ACTION / OPPORTUNITY / MONITOR / HOLD)",
+  "6. Advisory generation + translation",
+  "7. Real-time delivery to web feed + feedback capture",
+];
+
+const DELIVERY_CHANNELS = [
+  { name: "Web Chat UI", status: "Live", icon: MessageSquareText },
+  { name: "SMS Broadcast", status: "Planned", icon: PhoneCall },
+  { name: "IVR Voice Hotline", status: "Planned", icon: PhoneCall },
+];
+
 // --- Utilities ---
 const getCategoryStyle = (category: SignalCategory) => {
   switch (category) {
-    case "URGENT_ACTION": return { bg: "bg-red-600", text: "text-white", label: "⚠ URGENT ACTION" };
-    case "OPPORTUNITY": return { bg: "bg-green-600", text: "text-white", label: "✦ OPPORTUNITY" };
-    case "MONITOR": return { bg: "bg-amber-500", text: "text-amber-950", label: "◉ MONITOR" };
-    case "HOLD": return { bg: "bg-gray-300", text: "text-gray-900", label: "— HOLD" };
+    case "URGENT_ACTION": return { bg: "bg-destructive", text: "text-white", label: "⚠ URGENT ACTION" };
+    case "OPPORTUNITY": return { bg: "bg-success", text: "text-white", label: "✦ OPPORTUNITY" };
+    case "MONITOR": return { bg: "bg-warning", text: "text-warning-foreground", label: "◉ MONITOR" };
+    case "HOLD": return { bg: "bg-holding", text: "text-foreground", label: "— HOLD" };
   }
 };
 
 const getStatusColor = (status: "error" | "warn" | "ok") => {
-  if (status === "error") return "bg-red-500";
-  if (status === "warn") return "bg-amber-500";
-  return "bg-green-500";
+  if (status === "error") return "bg-destructive";
+  if (status === "warn") return "bg-warning";
+  return "bg-success";
 };
 
 // --- Main Page Component ---
@@ -131,7 +165,6 @@ export default function AgriSentinelDashboard() {
   // Agent Run Simulation
   useEffect(() => {
     if (agentState === "RUNNING") {
-      setRunStepIndex(0);
       const interval = setInterval(() => {
         setRunStepIndex(prev => {
           if (prev < CYCLING_STEPS.length - 1) return prev + 1;
@@ -144,6 +177,7 @@ export default function AgriSentinelDashboard() {
 
   const handleRunAgent = () => {
     if (agentState === "RUNNING") return;
+    setRunStepIndex(0);
     setAgentState("RUNNING");
     
     setTimeout(() => {
@@ -178,17 +212,17 @@ export default function AgriSentinelDashboard() {
   );
 
   return (
-    <div className="flex h-screen w-full bg-[#FAFAFA] text-[#2D3748] font-sans overflow-hidden">
+    <div className="flex h-screen w-full bg-background text-foreground font-sans overflow-hidden">
       
       {/* --- Mobile Header --- */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-40 shadow-sm">
-        <div className="flex items-center gap-2 text-[#2F5233]">
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card border-b border-border flex items-center justify-between px-4 z-40 shadow-sm">
+        <div className="flex items-center gap-2 text-primary">
           <Globe className="w-6 h-6" />
           <h1 className="font-bold text-xl">AgriSentinel</h1>
         </div>
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 bg-gray-100 rounded-md hover:bg-gray-200 transition"
+          className="p-2 bg-muted rounded-md hover:bg-muted transition"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -204,17 +238,17 @@ export default function AgriSentinelDashboard() {
 
       {/* --- Left Sidebar (Agent Control Panel) --- */}
       <aside className={`
-        fixed lg:static top-0 left-0 h-full w-[280px] bg-white border-r border-gray-200 
+        fixed lg:static top-0 left-0 h-full w-[280px] bg-card border-r border-border 
         shadow-xl lg:shadow-none z-50 transform transition-transform duration-300 ease-in-out flex flex-col
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}>
         {/* Brand Header */}
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-center gap-2 text-[#2F5233] mb-1">
+        <div className="p-6 border-b border-border/60">
+          <div className="flex items-center gap-2 text-primary mb-1">
             <Globe className="w-7 h-7" />
             <h1 className="text-2xl font-black tracking-tight">AgriSentinel</h1>
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Indonesia Agricultural Intelligence Monitor
           </p>
         </div>
@@ -223,33 +257,33 @@ export default function AgriSentinelDashboard() {
           
           {/* Agent Status Block */}
           <div className={`p-4 rounded-xl border-2 transition-colors ${
-            agentState === "RUNNING" ? "border-[#2F5233] bg-[#2F5233]/5 shadow-sm" : 
-            agentState === "ERROR" ? "border-red-500 bg-red-50" : "border-gray-200 bg-gray-50"
+            agentState === "RUNNING" ? "border-primary bg-primary/10 shadow-sm" : 
+            agentState === "ERROR" ? "border-destructive bg-destructive/10" : "border-border bg-muted/20"
           }`}>
             <div className="flex items-center gap-3">
               {agentState === "RUNNING" && (
-                <div className="w-10 h-10 rounded-full bg-[#2F5233]/20 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                   <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2F5233] opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#2F5233]"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
                   </span>
                 </div>
               )}
               {agentState === "IDLE" && (
-                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-5 h-5 text-gray-600" />
+                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5 text-muted-foreground" />
                 </div>
               )}
               {agentState === "ERROR" && (
-                <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center shrink-0">
-                  <ServerCrash className="w-5 h-5 text-red-600" />
+                <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
+                  <ServerCrash className="w-5 h-5 text-destructive" />
                 </div>
               )}
               <div className="flex flex-col">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Agent Status
                 </span>
-                <span className="text-sm font-semibold text-gray-900">
+                <span className="text-sm font-semibold text-foreground">
                   {agentState === "RUNNING" ? CYCLING_STEPS[runStepIndex] :
                    agentState === "ERROR" ? "API Error" :
                    `IDLE (Last run: ${lastRunTime})`}
@@ -263,7 +297,7 @@ export default function AgriSentinelDashboard() {
             onClick={handleRunAgent}
             disabled={agentState === "RUNNING"}
             className={`w-full py-3.5 px-4 rounded-xl font-bold text-white shadow-md transition-all flex justify-center items-center gap-2 ${
-              agentState === "RUNNING" ? "bg-[#2F5233]/70 cursor-not-allowed" : "bg-[#2F5233] hover:bg-[#244227] active:scale-[0.98]"
+              agentState === "RUNNING" ? "bg-primary/70 cursor-not-allowed" : "bg-primary hover:bg-primary/90 active:scale-[0.98]"
             }`}
           >
             {agentState === "RUNNING" ? (
@@ -273,18 +307,18 @@ export default function AgriSentinelDashboard() {
 
           {/* Province Filter */}
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Province Filter
             </label>
             <div className="relative">
               <select 
                 value={selectedProvince}
                 onChange={(e) => setSelectedProvince(e.target.value)}
-                className="w-full appearance-none bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-[#2F5233] focus:border-[#2F5233] block p-2.5 font-medium outline-none"
+                className="w-full appearance-none bg-card border border-border text-foreground text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5 font-medium outline-none"
               >
                 {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-muted-foreground">
                 <ChevronDown className="w-4 h-4" />
               </div>
             </div>
@@ -292,84 +326,145 @@ export default function AgriSentinelDashboard() {
 
           {/* System Stats */}
           <div className="flex flex-col gap-2">
-            <div className="bg-white border border-gray-200 rounded-lg p-3 flex justify-between items-center shadow-sm">
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium"><Cloud className="w-4 h-4" /> Sources Monitored</div>
-              <span className="font-bold text-gray-900">6</span>
+            <div className="bg-card border border-border rounded-lg p-3 flex justify-between items-center shadow-sm">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium"><Cloud className="w-4 h-4" /> Sources Monitored</div>
+              <span className="font-bold text-foreground">6</span>
             </div>
-            <div className="bg-white border border-gray-200 rounded-lg p-3 flex justify-between items-center shadow-sm">
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium"><Activity className="w-4 h-4" /> Active Advisories</div>
-              <span className="font-bold text-[#2F5233]">{advisories.length}</span>
+            <div className="bg-card border border-border rounded-lg p-3 flex justify-between items-center shadow-sm">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium"><Activity className="w-4 h-4" /> Active Advisories</div>
+              <span className="font-bold text-primary">{advisories.length}</span>
             </div>
-            <div className="bg-white border border-gray-200 rounded-lg p-3 flex justify-between items-center shadow-sm">
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium"><Clock className="w-4 h-4" /> Last Updated</div>
-              <span className="text-xs font-bold text-gray-900">{lastRunTime}</span>
+            <div className="bg-card border border-border rounded-lg p-3 flex justify-between items-center shadow-sm">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium"><Clock className="w-4 h-4" /> Last Updated</div>
+              <span className="text-xs font-bold text-foreground">{lastRunTime}</span>
             </div>
           </div>
 
           {/* Health Indicators */}
           <div className="flex flex-col gap-3">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Data Source Health
             </label>
-            <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-col gap-3 shadow-sm">
+            <div className="bg-card border border-border rounded-lg p-4 flex flex-col gap-3 shadow-sm">
               {SOURCES.map((src, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                  <span className="text-sm font-medium text-gray-700">{src.name}</span>
+                  <div className="w-2 h-2 rounded-full bg-success shrink-0" />
+                  <span className="text-sm font-medium text-foreground/80">{src.name}</span>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Signal Coverage</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground/90">
+                <Database className="w-4 h-4 text-primary" />
+                Price Intelligence
+              </div>
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground/90">
+                <CloudRainWind className="w-4 h-4 text-primary" />
+                Weather Forecasts
+              </div>
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground/90">
+                <Bug className="w-4 h-4 text-primary" />
+                Pest & Disease Alerts
+              </div>
             </div>
           </div>
         </div>
       </aside>
 
       {/* --- Main Panel (Advisory Feed) --- */}
-      <main className="flex-1 flex flex-col h-full bg-[#FAFAFA] pt-16 lg:pt-0 relative overflow-hidden">
+      <main className="flex-1 flex flex-col h-full bg-background pt-16 lg:pt-0 relative overflow-hidden">
         
         {/* Feed Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shrink-0 shadow-sm z-10 gap-4">
+        <div className="bg-card border-b border-border px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between shrink-0 shadow-sm z-10 gap-4">
           <div className="flex flex-col">
-            <h2 className="text-xl font-extrabold text-[#2D3748] mb-1">Market Overview</h2>
-            <p className="text-sm font-medium text-gray-500">Live commodity tracking</p>
+            <h2 className="text-xl font-extrabold text-foreground mb-1">Market Overview</h2>
+            <p className="text-sm font-medium text-muted-foreground">Live commodity tracking</p>
           </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-100 border border-green-200">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/15 border border-success/30">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
             </span>
-            <span className="text-[10px] font-bold text-green-700 uppercase tracking-widest">Live Feed</span>
+            <span className="text-[10px] font-bold text-success uppercase tracking-widest">Live Feed</span>
           </div>
         </div>
 
         {/* Scrollable Feed */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 hide-scrollbar">
-          <div className="max-w-4xl mx-auto flex flex-col pb-12">
-            
-            {/* Raw Material Charts Section */}
-            <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
-              <RawMaterialCharts />
-            </div>
-
-            <div className="flex items-center gap-2 mb-6">
-              <Globe className="w-5 h-5 text-[#2F5233]" />
-              <h2 className="text-xl font-extrabold text-[#2D3748]">Regional Advisories</h2>
-            </div>
-            
-            <div className="flex flex-col gap-6">
-            {filteredAdvisories.map((advisory) => (
-              <AdvisoryCardUI 
-                key={advisory.id} 
-                advisory={advisory} 
-              />
-            ))}
-            
-            {filteredAdvisories.length === 0 && (
-              <div className="text-center py-20 text-gray-500">
-                <Globe className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="font-medium text-lg">No advisories for this province.</p>
+        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6 xl:px-8 hide-scrollbar">
+          <div className="w-full max-w-[1500px] mx-auto pb-12 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
+            <section>
+              <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                <RawMaterialCharts />
               </div>
-            )}
-            </div>
+
+              <div className="flex items-center gap-2 mb-6">
+                <Globe className="w-5 h-5 text-primary" />
+                <h2 className="text-xl font-extrabold text-foreground">Regional Advisories</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+              {filteredAdvisories.map((advisory) => (
+                <AdvisoryCardUI 
+                  key={advisory.id} 
+                  advisory={advisory} 
+                />
+              ))}
+              
+              {filteredAdvisories.length === 0 && (
+                <div className="text-center py-20 text-muted-foreground">
+                  <Globe className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p className="font-medium text-lg">No advisories for this province.</p>
+                </div>
+              )}
+              </div>
+            </section>
+
+            <aside className="space-y-4 xl:sticky xl:top-6 self-start">
+              <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+                <h3 className="text-sm font-black tracking-wide text-foreground mb-3">Core Product Features</h3>
+                <div className="space-y-3">
+                  {FEATURE_PILLARS.map((feature) => (
+                    <div key={feature.title} className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <feature.icon className="w-4 h-4 text-primary" />
+                        <p className="text-sm font-semibold text-foreground">{feature.title}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{feature.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+                <h3 className="text-sm font-black tracking-wide text-foreground mb-3">Agent Logic Flow</h3>
+                <div className="space-y-2">
+                  {AGENT_FLOW.map((step) => (
+                    <p key={step} className="text-xs leading-relaxed text-foreground/90">{step}</p>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+                <h3 className="text-sm font-black tracking-wide text-foreground mb-3">Delivery Channels</h3>
+                <div className="space-y-2">
+                  {DELIVERY_CHANNELS.map((channel) => (
+                    <div key={channel.name} className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <channel.icon className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium text-foreground">{channel.name}</span>
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${channel.status === "Live" ? "text-success" : "text-muted-foreground"}`}>
+                        {channel.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
       </main>
@@ -388,17 +483,17 @@ function AdvisoryCardUI({ advisory }: { advisory: Advisory }) {
   const style = getCategoryStyle(advisory.category);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-500">
+    <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-4 duration-500">
       
       {/* Header Row */}
-      <div className="bg-gray-50 border-b border-gray-100 px-5 py-4 flex flex-wrap items-center gap-3 justify-between">
+      <div className="bg-muted/20 border-b border-border/60 px-5 py-4 flex flex-wrap items-center gap-3 justify-between">
         <div className={`px-3 py-1 rounded-full text-[11px] font-black tracking-widest ${style.bg} ${style.text}`}>
           {style.label}
         </div>
-        <h3 className="text-lg font-bold text-gray-900 mx-auto sm:mx-0 flex-1 text-center sm:text-left min-w-[150px]">
+        <h3 className="text-lg font-bold text-foreground mx-auto sm:mx-0 flex-1 text-center sm:text-left min-w-[150px]">
           {advisory.commodity} — {advisory.province}
         </h3>
-        <span className="text-xs font-medium text-gray-500 whitespace-nowrap">
+        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
           {advisory.timestamp}
         </span>
       </div>
@@ -407,18 +502,18 @@ function AdvisoryCardUI({ advisory }: { advisory: Advisory }) {
         
         {/* Advisory Text */}
         <div className="flex flex-col gap-4">
-          <p className="text-[17px] leading-[1.7] text-[#3A4354] font-medium tracking-tight">
+          <p className="text-[17px] leading-[1.7] text-foreground/90 font-medium tracking-tight">
             {lang === "EN" ? advisory.textEn : advisory.textId}
           </p>
           
-          <div className="flex bg-gray-100 p-1 rounded-lg w-max shrink-0 border border-gray-200">
+          <div className="flex bg-muted p-1 rounded-lg w-max shrink-0 border border-border">
             <button 
               onClick={() => setLang("EN")} 
-              className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${lang === "EN" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${lang === "EN" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground/80"}`}
             >EN</button>
             <button 
               onClick={() => setLang("ID")} 
-              className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${lang === "ID" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${lang === "ID" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground/80"}`}
             >ID</button>
           </div>
         </div>
@@ -426,12 +521,12 @@ function AdvisoryCardUI({ advisory }: { advisory: Advisory }) {
         {/* Confidence Bar */}
         <div className="flex flex-col gap-2 pt-2">
           <div className="flex justify-between items-end">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
               Confidence Level
             </span>
-            <span className="font-bold text-sm text-gray-900">{advisory.confidence}%</span>
+            <span className="font-bold text-sm text-foreground">{advisory.confidence}%</span>
           </div>
-          <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
             <div 
               className={`h-full transition-all duration-1000 ease-out ${style.bg}`} 
               style={{ width: `${advisory.confidence}%` }}
@@ -439,39 +534,39 @@ function AdvisoryCardUI({ advisory }: { advisory: Advisory }) {
           </div>
         </div>
 
-        <div className="h-px w-full bg-gray-100 my-2" />
+        <div className="h-px w-full bg-muted my-2" />
 
         {/* Collapsible: Signals */}
         <div>
           <button 
             onClick={() => setSignalsOpen(!signalsOpen)}
-            className="flex items-center gap-2 text-sm font-bold text-[#2F5233] hover:text-[#244227] transition-colors outline-none w-full text-left"
+            className="flex items-center gap-2 text-sm font-bold text-primary hover:text-primary/80 transition-colors outline-none w-full text-left"
           >
             {signalsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             View signal details
           </button>
           
           {signalsOpen && (
-            <div className="mt-4 flex flex-col gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+            <div className="mt-4 flex flex-col gap-4 bg-muted/20 p-4 rounded-xl border border-border animate-in fade-in zoom-in-95 duration-200">
               <div className="flex items-start gap-4">
                 <div className={`mt-1.5 shrink-0 w-2.5 h-2.5 rounded-full ${getStatusColor(advisory.signals.price.status)}`} />
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">Price</span>
-                  <span className="text-sm font-semibold text-gray-900">{advisory.signals.price.text}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Price</span>
+                  <span className="text-sm font-semibold text-foreground">{advisory.signals.price.text}</span>
                 </div>
               </div>
               <div className="flex items-start gap-4">
                 <div className={`mt-1.5 shrink-0 w-2.5 h-2.5 rounded-full ${getStatusColor(advisory.signals.weather.status)}`} />
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">Weather</span>
-                  <span className="text-sm font-semibold text-gray-900">{advisory.signals.weather.text}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Weather</span>
+                  <span className="text-sm font-semibold text-foreground">{advisory.signals.weather.text}</span>
                 </div>
               </div>
               <div className="flex items-start gap-4">
                 <div className={`mt-1.5 shrink-0 w-2.5 h-2.5 rounded-full ${getStatusColor(advisory.signals.pest.status)}`} />
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">Pest Alert</span>
-                  <span className="text-sm font-semibold text-gray-900">{advisory.signals.pest.text}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Pest Alert</span>
+                  <span className="text-sm font-semibold text-foreground">{advisory.signals.pest.text}</span>
                 </div>
               </div>
             </div>
@@ -482,23 +577,23 @@ function AdvisoryCardUI({ advisory }: { advisory: Advisory }) {
         <div>
           <button 
             onClick={() => setSourcesOpen(!sourcesOpen)}
-            className="flex items-center gap-2 text-sm font-bold text-[#2F5233] hover:text-[#244227] transition-colors outline-none w-full text-left"
+            className="flex items-center gap-2 text-sm font-bold text-primary hover:text-primary/80 transition-colors outline-none w-full text-left"
           >
             {sourcesOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             {advisory.sources.length} Data Sources
           </button>
           
           {sourcesOpen && (
-            <div className="mt-4 flex flex-col gap-3 pl-6 border-l-2 border-green-200 animate-in fade-in slide-in-from-left-2 duration-200">
+            <div className="mt-4 flex flex-col gap-3 pl-6 border-l-2 border-success/30 animate-in fade-in slide-in-from-left-2 duration-200">
               {advisory.sources.map((s, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
-                  <a href={s.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-[#2F5233] hover:underline">
+                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                  <a href={s.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary hover:underline">
                     {s.title}
                   </a>
                 </div>
               ))}
-              <div className="mt-2 text-xs italic text-gray-500">
+              <div className="mt-2 text-xs italic text-muted-foreground">
                 This advisory is AI-generated. Consult your local agricultural extension officer before making major decisions.
               </div>
             </div>
@@ -507,15 +602,15 @@ function AdvisoryCardUI({ advisory }: { advisory: Advisory }) {
       </div>
 
       {/* Footer / Feedback */}
-      <div className="bg-gray-50 border-t border-gray-100 px-6 py-4 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Was this helpful?</span>
+      <div className="bg-muted/20 border-t border-border/60 px-6 py-4 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Was this helpful?</span>
         <div className="flex items-center gap-2">
           <button 
             onClick={() => setFeedback("UP")}
             disabled={feedback !== null}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all text-sm font-bold ${
-              feedback === "UP" ? "bg-[#2F5233] border-[#2F5233] text-white" : 
-              "bg-white border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              feedback === "UP" ? "bg-primary border-primary text-white" : 
+              "bg-card border-border text-muted-foreground hover:bg-muted disabled:opacity-50"
             }`}
           >
             <ThumbsUp className={`w-4 h-4 ${feedback === "UP" ? "fill-white" : ""}`} />
@@ -525,8 +620,8 @@ function AdvisoryCardUI({ advisory }: { advisory: Advisory }) {
             onClick={() => setFeedback("DOWN")}
             disabled={feedback !== null}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all text-sm font-bold ${
-              feedback === "DOWN" ? "bg-red-600 border-red-600 text-white" : 
-              "bg-white border-gray-200 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50"
+              feedback === "DOWN" ? "bg-destructive border-destructive text-white" : 
+              "bg-card border-border text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-50"
             }`}
           >
             <ThumbsDown className={`w-4 h-4 ${feedback === "DOWN" ? "fill-white" : ""}`} />
