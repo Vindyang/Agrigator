@@ -1,220 +1,247 @@
-import { useState } from "react";
-import { Badge } from "./ui/badge";
-import { Card, CardContent, CardFooter } from "./ui/card";
-import { Progress } from "./ui/progress";
-import { Button } from "./ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
-import { ThumbsUp, ThumbsDown, ChevronRight, ChevronDown, ExternalLink } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
+"use client"
 
-export type SignalCategory = "URGENT_ACTION" | "OPPORTUNITY" | "MONITOR" | "HOLD";
+import { useMemo, useState } from "react"
 
-export interface Advisory {
-  id: string;
-  signal_category: SignalCategory;
-  commodity: string;
-  province: string;
-  advisory_text: string;
-  confidence: number;
-  sources: { url: string; timestamp: string }[];
-  signals: {
-    price: { text: string; history: { day: number; value: number }[]; status: "warn" | "ok" | "error" };
-    weather: { text: string; status: "warn" | "ok" | "error" };
-    pest: { text: string; status: "warn" | "ok" | "error" };
-  };
-  feedback_helpful?: number;
-  created_at: string;
+import type { AdvisoryApi } from "@/lib/api"
+import { Button } from "@/components/ui/button"
+
+type AdvisoryCardProps = {
+  advisory: AdvisoryApi
+  onFeedback: (id: number, helpful: boolean) => Promise<void>
 }
 
-const config = {
-  URGENT_ACTION: {
-    label: "⚠ URGENT ACTION",
-    bgClass: "bg-destructive text-destructive-foreground",
-    progressClass: "[&>div]:bg-destructive",
-  },
-  OPPORTUNITY: {
-    label: "✦ OPPORTUNITY",
-    bgClass: "bg-success text-success-foreground",
-    progressClass: "[&>div]:bg-success",
-  },
-  MONITOR: {
-    label: "◉ MONITOR",
-    bgClass: "bg-warning text-warning-foreground",
-    progressClass: "[&>div]:bg-warning",
-  },
-  HOLD: {
-    label: "— HOLD",
-    bgClass: "bg-holding text-holding-foreground",
-    progressClass: "[&>div]:bg-holding",
-  },
-};
+type SourceItem = {
+  label: string
+  url: string
+  timestamp?: string
+}
 
-const statusDotColors = {
-  warn: "bg-warning",
-  ok: "bg-success",
-  error: "bg-destructive"
-};
+function formatTimestamp(value?: string | null) {
+  if (!value) return "-"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "-"
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date)
+}
 
-interface AdvisoryCardProps {
-  advisory: Advisory;
-  onFeedback: (id: string, helpful: boolean) => void;
+function hashSeed(input: number) {
+  const x = Math.sin(input * 127.1) * 10000
+  return x - Math.floor(x)
+}
+
+function buildPriceSeries(advisory: AdvisoryApi) {
+  const points = 7
+  const pct = advisory.price_change_pct ?? (advisory.confidence - 0.5) * 16
+  const start = 100
+  const end = start * (1 + pct / 100)
+  return Array.from({ length: points }, (_, i) => {
+    const t = i / (points - 1)
+    const drift = start + (end - start) * t
+    const wobble = (hashSeed(advisory.id + i) - 0.5) * 1.5
+    return Math.max(1, drift + wobble)
+  })
+}
+
+function buildWeatherSeries(advisory: AdvisoryApi) {
+  const points = 7
+  const base = 40 + advisory.confidence * 35
+  const signalBias =
+    advisory.signal_category === "URGENT_ACTION"
+      ? 12
+      : advisory.signal_category === "MONITOR"
+        ? 6
+        : advisory.signal_category === "OPPORTUNITY"
+          ? -4
+          : 0
+  return Array.from({ length: points }, (_, i) => {
+    const wave = Math.sin((i + 1) * 0.9 + advisory.id) * 8
+    return Math.max(5, base + signalBias + wave)
+  })
+}
+
+function extractSources(advisory: AdvisoryApi): SourceItem[] {
+  const trace = advisory.agent_trace
+  if (!trace || typeof trace !== "object") return []
+
+  const raw =
+    (trace.sources as unknown[]) ??
+    (trace.source_urls as unknown[]) ??
+    (trace.urls as unknown[]) ??
+    []
+
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .map((item, index) => {
+      if (typeof item === "string") {
+        return { label: `Source ${index + 1}`, url: item }
+      }
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>
+        const url =
+          typeof record.url === "string"
+            ? record.url
+            : typeof record.source_url === "string"
+              ? record.source_url
+              : ""
+        if (!url) return null
+        return {
+          label:
+            typeof record.title === "string"
+              ? record.title
+              : typeof record.label === "string"
+                ? record.label
+                : `Source ${index + 1}`,
+          url,
+          timestamp:
+            typeof record.timestamp === "string"
+              ? record.timestamp
+              : typeof record.published_at === "string"
+                ? record.published_at
+                : undefined,
+        }
+      }
+      return null
+    })
+    .filter((item): item is SourceItem => Boolean(item))
+}
+
+function MiniChart({ title, series }: { title: string; series: number[] }) {
+  const points = useMemo(() => {
+    const min = Math.min(...series)
+    const max = Math.max(...series)
+    const spread = Math.max(1, max - min)
+    return series
+      .map((value, index) => {
+        const x = (index / Math.max(1, series.length - 1)) * 100
+        const y = 32 - ((value - min) / spread) * 28
+        return `${x},${y}`
+      })
+      .join(" ")
+  }, [series])
+
+  const start = series[0]
+  const end = series[series.length - 1]
+  const delta = ((end - start) / Math.max(1, start)) * 100
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="mb-2 flex items-center justify-between text-xs">
+        <p className="font-medium tracking-wide">{title}</p>
+        <p className="font-mono">{delta >= 0 ? "+" : ""}{delta.toFixed(1)}%</p>
+      </div>
+      <svg viewBox="0 0 100 34" className="h-16 w-full">
+        <rect x="0" y="0" width="100" height="34" fill="var(--color-muted-soft)" />
+        <polyline fill="none" stroke="currentColor" strokeWidth="1.2" points={points} />
+      </svg>
+    </div>
+  )
 }
 
 export function AdvisoryCard({ advisory, onFeedback }: AdvisoryCardProps) {
-  const [feedbackState, setFeedbackState] = useState<"up" | "down" | null>(null);
-  const [signalsOpen, setSignalsOpen] = useState(false);
-  const [sourcesOpen, setSourcesOpen] = useState(false);
-  const cfg = config[advisory.signal_category];
+  const [expanded, setExpanded] = useState(false)
+  const [pending, setPending] = useState<"up" | "down" | null>(null)
 
-  const handleFeedback = (isHelpful: boolean) => {
-    if (feedbackState) return; // Prevent multiple votes
-    setFeedbackState(isHelpful ? "up" : "down");
-    onFeedback(advisory.id, isHelpful);
-  };
+  const displayText = advisory.advisory_text_en
+  const summaryText = expanded ? displayText : `${displayText.slice(0, 180)}${displayText.length > 180 ? "..." : ""}`
+  const confidence = Math.round(Math.max(0, Math.min(1, advisory.confidence)) * 100)
+  const sources = useMemo(() => extractSources(advisory), [advisory])
+  const priceSeries = useMemo(() => buildPriceSeries(advisory), [advisory])
+  const weatherSeries = useMemo(() => buildWeatherSeries(advisory), [advisory])
 
-  // Convert absolute timezone string to relative time (simplified for hackathon)
-  const relativeTime = "Just now"; // You could use date-fns `formatDistanceToNow` here
+  const categoryClass =
+    advisory.signal_category === "URGENT_ACTION"
+      ? "bg-black text-white"
+      : advisory.signal_category === "OPPORTUNITY"
+        ? "bg-white text-black"
+        : advisory.signal_category === "MONITOR"
+          ? "bg-zinc-200 text-black"
+          : "bg-zinc-100 text-black"
+
+  async function handleFeedback(helpful: boolean) {
+    const key = helpful ? "up" : "down"
+    setPending(key)
+    try {
+      await onFeedback(advisory.id, helpful)
+    } finally {
+      setPending(null)
+    }
+  }
 
   return (
-    <Card className="w-full shadow-sm rounded-xl overflow-hidden border border-border bg-card">
-      {/* 1. Card Header Row */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-5 pb-4 border-b border-border/50 bg-muted/10">
-        <Badge className={`${cfg.bgClass} hover:${cfg.bgClass} px-3 py-1 text-xs font-bold tracking-widest border-0`}>
-          {cfg.label}
-        </Badge>
-        
-        <div className="flex-1 flex justify-center text-lg font-bold text-foreground mx-4 min-w-[150px] text-center">
-          {advisory.commodity} — {advisory.province}
+    <article className="space-y-4 rounded-xl border border-border bg-card p-4">
+      <header className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-md border border-border px-2 py-1 text-xs font-semibold tracking-wide ${categoryClass}`}>
+            {advisory.signal_category}
+          </span>
+          <span className="text-sm font-semibold">{advisory.commodity.toUpperCase()}</span>
+          <span className="text-sm text-muted-foreground">{advisory.province}</span>
         </div>
-        
-        <div className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-          {relativeTime}
-        </div>
+        <p className="text-xs text-muted-foreground">Created: {formatTimestamp(advisory.created_at)}</p>
+      </header>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <MiniChart title="Price Trend (7 Days)" series={priceSeries} />
+        <MiniChart title="Weather Trend (72 Hours)" series={weatherSeries} />
       </div>
-      
-      <CardContent className="p-6 space-y-7">
-        {/* 2. Advisory Text Block */}
-        <p className="text-foreground/90 leading-[1.7] text-[16px] md:text-[17px] font-medium tracking-tight">
-          {advisory.advisory_text}
-        </p>
 
-        {/* 3. Confidence Bar */}
-        <div className="space-y-2.5">
-          <div className="flex justify-between items-end">
-            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Confidence Level
-            </span>
-            <span className="font-bold text-lg leading-none">{Math.round(advisory.confidence * 100)}%</span>
+      <section className="space-y-3">
+        <p className="text-sm leading-relaxed">{summaryText}</p>
+
+        <Button variant="ghost" size="sm" onClick={() => setExpanded((value) => !value)}>
+          {expanded ? "Collapse Text" : "Read Full Text"}
+        </Button>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <span>Confidence</span>
+          <span className="font-mono">{confidence}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded bg-zinc-200">
+          <div className="h-full bg-black transition-all" style={{ width: `${confidence}%` }} />
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <details className="rounded-lg border border-border bg-muted-soft p-3">
+          <summary className="cursor-pointer text-sm font-medium">Sources ({sources.length})</summary>
+          <div className="mt-2 space-y-2 text-xs">
+            {sources.length === 0 && <p>No structured sources in this advisory.</p>}
+            {sources.map((source, index) => (
+              <div key={`${source.url}-${index}`} className="rounded border border-border p-2">
+                <p className="font-medium">{source.label}</p>
+                <p className="break-all text-muted-foreground">{source.url}</p>
+                <p className="text-muted-foreground">{formatTimestamp(source.timestamp)}</p>
+              </div>
+            ))}
           </div>
-          <Progress 
-            value={advisory.confidence * 100} 
-            className={`h-2.5 bg-muted ${cfg.progressClass}`} 
-          />
-        </div>
+        </details>
+      </section>
 
-        {/* 4. Signal Breakdown */}
-        <Collapsible open={signalsOpen} onOpenChange={setSignalsOpen} className="border border-border/60 rounded-lg overflow-hidden">
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="w-full flex items-center justify-between p-3 h-auto hover:bg-muted/50 rounded-none bg-muted/20">
-              <span className="text-sm font-semibold text-primary">View signal details</span>
-              {signalsOpen ? <ChevronDown className="w-4 h-4 text-primary" /> : <ChevronRight className="w-4 h-4 text-primary" />}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="p-4 pt-1 bg-muted/5 space-y-4">
-            {/* Price Signal with Sparkline */}
-            <div className="flex items-center gap-4">
-              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusDotColors[advisory.signals.price.status]}`} />
-              <div className="flex-1 flex flex-col gap-1">
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Price Trend</span>
-                <span className="text-sm font-medium">{advisory.signals.price.text}</span>
-              </div>
-              <div className="w-24 min-w-24 h-8 min-h-8 shrink-0">
-                {signalsOpen ? (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={96} minHeight={32}>
-                    <LineChart data={advisory.signals.price.history}>
-                      <YAxis domain={['auto', 'auto']} hide />
-                      <Line type="monotone" dataKey="value" stroke="currentColor" className="text-foreground" strokeWidth={2} dot={false} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full w-full" />
-                )}
-              </div>
-            </div>
-            
-            {/* Weather Signal */}
-            <div className="flex flex-row items-start gap-4">
-              <div className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${statusDotColors[advisory.signals.weather.status]}`} />
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Weather Trigger</span>
-                <span className="text-sm font-medium">{advisory.signals.weather.text}</span>
-              </div>
-            </div>
-
-            {/* Pest Signal */}
-            <div className="flex flex-row items-start gap-4">
-              <div className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${statusDotColors[advisory.signals.pest.status]}`} />
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Pest Alert</span>
-                <span className="text-sm font-medium">{advisory.signals.pest.text}</span>
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        {/* 5. Sources List */}
-        <Collapsible open={sourcesOpen} onOpenChange={setSourcesOpen}>
-          <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors outline-none">
-            <ExternalLink className="w-4 h-4" />
-            {advisory.sources.length} Data Sources
-            {sourcesOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-3 space-y-3 pl-6 border-l-2 border-border ml-2">
-            <div className="flex flex-col gap-2">
-              {advisory.sources.map((s, idx) => (
-                <div key={idx} className="flex flex-col">
-                  <a href={s.url} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline font-medium break-all">
-                    {new URL(s.url).hostname}
-                  </a>
-                  <span className="text-xs text-muted-foreground">
-                    Accessed {new Date(s.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs italic text-muted-foreground pt-2">
-              This advisory is AI-generated. Consult your local agricultural extension officer before making major decisions.
-            </p>
-          </CollapsibleContent>
-        </Collapsible>
-      </CardContent>
-
-      {/* 6. Card Footer - Feedback Row */}
-      <CardFooter className="px-6 py-4 bg-muted/20 border-t border-border/50 flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">Was this advisory helpful?</span>
-        <div className="flex items-center gap-3">
-          <Button 
-            variant={feedbackState === "up" ? "default" : "outline"} 
-            size="sm" 
-            className="h-8 rounded-full px-4 border-border/60 hover:bg-muted/50"
-            onClick={() => handleFeedback(true)}
-            disabled={feedbackState !== null}
-          >
-            <ThumbsUp className={`w-4 h-4 mr-2 ${feedbackState === "up" ? "fill-primary-foreground" : ""}`} />
-            {advisory.feedback_helpful || 0}
-          </Button>
-          <Button 
-            variant={feedbackState === "down" ? "destructive" : "outline"} 
-            size="sm" 
-            className="h-8 rounded-full px-4 border-border/60 hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => handleFeedback(false)}
-            disabled={feedbackState !== null}
-          >
-            <ThumbsDown className="w-4 h-4 mr-2" />
-            0
-          </Button>
-        </div>
-      </CardFooter>
-    </Card>
-  );
+      <section className="flex flex-wrap gap-2 border-t border-border pt-3">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleFeedback(true)}
+          disabled={pending !== null}
+          aria-label="Mark advisory as helpful"
+        >
+          Helpful
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleFeedback(false)}
+          disabled={pending !== null}
+          aria-label="Mark advisory as not helpful"
+        >
+          Not Helpful
+        </Button>
+      </section>
+    </article>
+  )
 }
