@@ -21,29 +21,25 @@ logger = logging.getLogger(__name__)
 BBPOPT_URL = "https://bbpopt.tanamanpangan.pertanian.go.id/banner/peramalan"
 
 _EXTRACTION_GOAL = """
-Extract pest and disease forecast data from this Indonesian government agricultural portal (BBPOPT).
-
-This is a legacy government website and may load slowly. Wait for the main content to fully
-render before extracting. Do not attempt to extract until the page body is visible.
+Extract pest and disease forecast data from the BBPOPT portal.
 
 Steps:
 1. If a cookie banner, login prompt, or privacy notice appears, dismiss it.
-2. If a CAPTCHA appears, stop immediately and return {"rows": [], "error": "captcha_encountered"}.
-3. Look for a table or list containing OPT (Organisme Pengganggu Tumbuhan) pest forecast data.
-   The table typically has columns for: province (Provinsi), regency (Kabupaten/Kota),
-   commodity (Komoditas), pest name (Nama OPT), and attack severity (Tingkat Serangan).
-4. For each row in the forecast table, extract:
-   - province: the province name in Indonesian (e.g. "Jawa Barat")
-   - regency: the regency or city name (e.g. "Indramayu"), or null if not shown
-   - pest_name: the pest or disease name exactly as shown (e.g. "Wereng Batang Coklat")
-   - severity: the severity level exactly as shown (e.g. "ringan", "sedang", "berat", "sangat berat")
-   - commodity: the affected crop (e.g. "Padi", "Jagung"), or null if not shown
-
+2. The exact pest forecast data (Organisme Pengganggu Tumbuhan / OPT) is contained inside a PDF report linked on the page. Look for the link to the newest OPT forecast PDF report, and CLICK IT to open the PDF. 
+   IMPORTANT: If the PDF opens in Google Drive but says "File not found", "No Preview Available", or shows an error, GO BACK to the previous page and click the second newest report. Repeat this until you find a report that successfully loads.
+3. Inside the successful PDF, locate the forecast tables. The tables have headings for the commodity (e.g. "PRAKIRAAN OPT PADI MT 2025-2026") and sub-headings (e.g., in blue) indicating the specific pest (e.g. "PBP" for Penggerek Batang Padi).
+4. The table columns are "No.", "Provinsi", "Minimum", "Rata-rata", and "Maksimum".
+5. For each row in these tables, extract the data. Follow these rules:
+   - province: use the "Provinsi" column.
+   - commodity: use the commodity name from the section header.
+   - pest_name: use the abbreviation from the table header.
+   - max_area: extract the raw number from the "Maksimum" column (as an integer). Remove any commas or dots.
+   
 Skip header rows. Extract all visible data rows.
 If the page has no data or the table is empty, return {"rows": []}.
 
 Return as JSON exactly matching this structure:
-{"rows": [{"province": "Jawa Barat", "regency": "Indramayu", "pest_name": "Wereng Batang Coklat", "severity": "berat", "commodity": "Padi"}]}
+{"rows": [{"province": "Jawa Barat", "pest_name": "PBP", "max_area": 6200, "commodity": "Padi"}]}
 """
 
 _SEVERITY_MAP: dict[str, Severity] = {
@@ -92,11 +88,25 @@ async def scrape_bbpopt_alerts() -> list[AlertRecord]:
     Returns an empty list on failure so the agent loop can still proceed
     with MONITOR/HOLD when pest data is unavailable.
     """
+    alert_schema = {
+        "type": "object",
+        "properties": {
+            "province": {"type": "string"},
+            "commodity": {"type": "string"},
+            "pest_name": {"type": "string"},
+            "max_area": {
+                "type": "integer", 
+                "description": "The raw maximum area affected in hectares. Do NOT use strings like 'berat'."
+            }
+        },
+        "required": ["province", "commodity", "pest_name", "max_area"]
+    }
+
     client = TinyFishClient()
     try:
         rows = await client.extract_table(
             BBPOPT_URL,
-            schema={},
+            schema=alert_schema,
             goal_override=_EXTRACTION_GOAL,
             browser_profile="stealth",
             proxy_country="US",
