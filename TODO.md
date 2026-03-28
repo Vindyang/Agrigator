@@ -26,17 +26,12 @@ Indonesian smallholder farmers produce the majority of the country's food staple
 
 ## Data Sources
 
-### Prices
+### Wholesale Market Prices
 
-- PIHPS Nasional (Pusat Informasi Harga Pangan Strategis) — hargapangan.id
-  - Daily wholesale and retail prices for strategic food commodities (rice, chili, onion, egg, cooking oil)
+- KEMENDAG (Kementerian Perdagangan) — spk2kp portal
+  - Daily wholesale market prices for strategic food commodities (rice, chili, onion, egg, cooking oil)
   - Covers all provinces and major cities across Indonesia
-  - Dynamic JS-rendered portal, needs TinyFish
-- BPS (Badan Pusat Statistik) — bps.go.id/subject/9
-  - Monthly producer prices and food price indices by province
-  - Mix of HTML tables and downloadable Excel files
-- Kementan price monitoring — pertanian.go.id
-  - Ministry of Agriculture commodity price data and market reports
+  - JS-rendered portal, needs TinyFish
 
 ### Weather
 
@@ -53,18 +48,16 @@ Indonesian smallholder farmers produce the majority of the country's food staple
 
 ### Pest & Disease Alerts
 
-- BBPOPT (Balai Besar Peramalan Organisme Pengganggu Tumbuhan) — bbpopt.tanamanpangan.pertanian.go.id
+- BBPOPT (Balai Besar Peramalan Organisme Pengganggu Tumbuhan) — bbpopt.tanamanpangan.pertanian.go.id/banner/peramalan
   - Indonesia's official plant pest forecasting centre under Kementan
   - Publishes seasonal OPT attack forecasts for rice, corn, soybeans, cassava
   - Key pests to monitor: Wereng Batang Coklat (Brown Planthopper / BPH), blast disease (blas), armyworm (ulat grayak)
   - Legacy ASP-style government portal — needs TinyFish
-- IPPC Indonesia — ippc.int/en/countries/indonesia/pestreports/
-  - Official Indonesian pest reports submitted to the International Plant Protection Convention
-  - English language, consistently structured HTML — easier to parse than BBPOPT
-- Antara News agriculture section — antaranews.com/tag/pertanian
-  - Indonesian state news agency — fast reporting on pest outbreaks and crop disasters in Bahasa Indonesia
-- Kementan press releases — pertanian.go.id
-  - Ministry of Agriculture announcements on disease outbreaks and emergency pest responses
+
+### Agricultural News & Trade Policy
+
+- Kementan news — pertanian.go.id/?show=news&act=view_all&cat=2
+  - Ministry of Agriculture news covering disease outbreaks, trade policy, and emergency crop responses
 
 ## Agent Logic Flow
 
@@ -123,11 +116,9 @@ agrisentinel/
 │ ├── **init**.py
 │ ├── tinyfish_client.py # TinyFish async wrapper: fetch_page, extract_table, extract_pdf, search_web
 │ ├── weather.py # BMKG + Open-Meteo 72h forecast for Indonesian provinces
-│ ├── pihps_prices.py # PIHPS Nasional wholesale/retail price scraper
-│ ├── bps_prices.py # BPS producer price index scraper
+│ ├── kemendag_prices.py # KEMENDAG spk2kp wholesale market price scraper
 │ ├── bbpopt_alerts.py # BBPOPT OPT pest forecast scraper
-│ ├── ippc_alerts.py # IPPC Indonesia pest report scraper
-│ └── news_search.py # Antara News + Kementan causal research search
+│ └── pertanian_news.py # Kementan news scraper (pertanian.go.id)
 ├── frontend/
 │ ├── pages/
 │ │ └── index.tsx # Main chat UI page
@@ -259,21 +250,19 @@ Build and implement fully in this exact order. After each item, show what was bu
 9. scrapers/tinyfish_client.py — TinyFish async wrapper with all four methods
 10. scrapers/weather.py — BMKG + Open-Meteo integration for 5 province coordinates
 11. agents/signal_detector.py — price_anomaly(), compound_signal(), SignalCategory enum
-12. agents/tools.py — get_prices, get_weather, get_alerts, search_news tool definitions
+12. agents/tools.py — get_prices, get_weather, get_alerts, get_news tool definitions
 13. agents/advisory_generator.py — generate_advisory() + translate_advisory()
 14. agents/orchestrator.py — full OpenAI Agents SDK loop with Runner.run()
 15. scheduler.py — APScheduler registering the agent run jobs
-16. scrapers/pihps_prices.py — PIHPS price scraper
-17. scrapers/bps_prices.py — BPS price scraper
-18. scrapers/bbpopt_alerts.py — BBPOPT pest alert scraper
-19. scrapers/ippc_alerts.py — IPPC pest report scraper
-20. scrapers/news_search.py — Antara News + Kementan causal news search
-21. main.py — all FastAPI routes + WebSocket /ws/advisories + lifespan startup
-22. scripts/seed_demo_data.py — seed Jawa Barat rice + weather + BPH alert data
-23. frontend/components/StatusBar.tsx
-24. frontend/components/AdvisoryCard.tsx
-25. frontend/components/ChatFeed.tsx
-26. frontend/pages/index.tsx — assemble full chat UI
-27. README.md — setup steps, how to seed data, how to run, demo script
+16. scrapers/kemendag_prices.py — KEMENDAG spk2kp wholesale price scraper
+17. scrapers/bbpopt_alerts.py — BBPOPT pest alert scraper
+18. scrapers/pertanian_news.py — Kementan news scraper (pertanian.go.id)
+19. main.py — all FastAPI routes + WebSocket /ws/advisories + lifespan startup
+20. scripts/seed_demo_data.py — seed Jawa Barat rice + weather + BPH alert data
+21. frontend/components/StatusBar.tsx
+22. frontend/components/AdvisoryCard.tsx
+23. frontend/components/ChatFeed.tsx
+24. frontend/pages/index.tsx — assemble full chat UI
+25. README.md — setup steps, how to seed data, how to run, demo script
 
 Start by creating the full directory and file structure with all files as stubs (correct imports, empty function bodies with docstrings, placeholder comments). Then implement fully in the priority order above. Confirm after each numbered item before proceeding to the next.

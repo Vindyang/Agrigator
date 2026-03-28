@@ -10,3 +10,4 @@ openai
 httpx
 apscheduler
 python-dotenv
+beautifulsoup4
