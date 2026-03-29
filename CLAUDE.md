@@ -16,15 +16,35 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-Required environment variables (copy from `.env.example` when created, or set manually):
-- `OPENAI_API_KEY`, `GROQ_API_KEY`, `TINYFISH_API_KEY`, `TINYFISH_API_URL`
-- `DATABASE_URL` (defaults: `postgresql+asyncpg://user:pass@localhost:5432/agrisentinel`)
-- `REDIS_URL` (defaults: `redis://localhost:6379`)
+Required environment variables (set manually or via `.env`):
+- `GROQ_API_KEY` — required
+- `OPENAI_API_KEY` (optional, not used in current code)
+- `TINYFISH_API_KEY` / `TINYFISH_API_URL` — no longer required (TinyFish removed)
+- `DATABASE_URL` (default: `postgresql+asyncpg://postgres:postgres@localhost:5432/agrisentinel`)
+- `REDIS_URL` (default: `redis://localhost:6379`)
 
 Seed demo data (guarantees URGENT_ACTION on first run):
 ```bash
-python scripts/seed_demo_data.py
+python -m scripts.seed_demo_data
 ```
+
+## Running the Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:3000
+npm run build
+npm run lint
+npm run typecheck  # tsc --noEmit
+```
+
+Frontend env var: `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8000`)
+
+## Debug & Test Scripts (at repo root)
+
+- `python test_bbpopt.py` — unit test for BBPOPT scraper
+- `python debug_bbpopt.py` / `debug_kemendag.py` / `debug_news.py` — interactive TinyFish API tests for each scraper
 
 ## Architecture
 
@@ -42,32 +62,35 @@ python scripts/seed_demo_data.py
 - `HOLD`: nothing detected
 
 ### LLM
-Uses **Groq API** (`llama-3.3-70b-versatile`) via OpenAI-compatible endpoint — not direct OpenAI. Advisory generated in English, then translated to Bahasa Indonesia with farmer-friendly language.
-
-### TinyFish Client
-Lives at `agrisentinel/backend/scrapers/tinyfish_client.py` (note: different directory from `backend/`). This is the browser automation layer used by all scrapers for JS-rendered pages. Methods: `fetch_page`, `extract_table`, `extract_pdf`, `search_web`. All have 3-attempt retry with exponential backoff.
+Uses **Groq API** (`llama-3.3-70b-versatile`) via OpenAI-compatible endpoint (`https://api.groq.com/openai/v1`). Advisory generated in English, then translated to Bahasa Indonesia with farmer-friendly language. `OPENAI_API_KEY` is loaded by config but not used.
 
 ### 4 Target Data Sources
-| Scraper file | Source | Data |
-|---|---|---|
-| `kemendag_prices.py` | KEMENDAG spk2kp | Wholesale market prices |
-| `weather.py` | BMKG + Open-Meteo fallback | 72h weather forecasts |
-| `bbpopt_alerts.py` | bbpopt.tanamanpangan.pertanian.go.id/banner/peramalan | Pest & disease alerts |
-| `pertanian_news.py` | pertanian.go.id/?show=news&act=view_all&cat=2 | Agricultural news |
+| Scraper file | Source | Method | Data |
+|---|---|---|---|
+| `kemendag_prices.py` | `api-sp2kp.kemendag.go.id/report/api/hnt` | httpx (JSON API) | Wholesale market prices |
+| `weather.py` | `api.open-meteo.com` | httpx (JSON API) | 72h weather forecasts |
+| `bbpopt_alerts.py` | `bbpopt.tanamanpangan.pertanian.go.id` | httpx + BeautifulSoup (find PDF) + pdfplumber (extract tables) | Pest & disease alerts |
+| `pertanian_news.py` | pertanian.go.id + Google News RSS | httpx + BeautifulSoup / RSS | Agricultural news |
 
 ### Key Provinces Monitored
 Jawa Barat (`-6.9175, 107.6191`), Jawa Tengah (`-7.1510, 110.1403`), Jawa Timur (`-7.5361, 112.2384`), Sulawesi Selatan (`-5.1477, 119.4327`), Sumatera Utara (`3.5952, 98.6722`)
 
-## Incomplete Parts (as of last check)
-- `backend/scrapers/weather.py` — stub, returns neutral defaults
-- `backend/scrapers/kemendag_prices.py` — not yet created
-- `backend/scrapers/bbpopt_alerts.py` — not yet created
-- `backend/scrapers/pertanian_news.py` — not yet created
-- `frontend/` — Next.js UI not yet created
+### Frontend (`frontend/`)
+Next.js 16.1.7 App Router with React 19 + Tailwind CSS 4 + shadcn/ui.
+
+Key components:
+- `ChatFeed.tsx` — real-time advisory feed; WebSocket primary, 25s polling fallback with exponential backoff reconnect
+- `AdvisoryCard.tsx` — signal badge, mini SVG charts (7-day price + 72h weather), feedback buttons
+- `StatusBar.tsx` — province selector, Run Agent button, connection status
+- `lib/api.ts` — typed API client (`AdvisoryApi`, `HealthApi`) and WebSocket URL helper
+
+## Incomplete Parts
+- `.env.example` — not yet created
 - `docker-compose.yml` — not yet created
+- Formal test suite — only debug scripts exist at repo root
 
 ## Data Models
-All in `backend/models/`. ORM + Pydantic schemas in the same file per model.
+All in `backend/models/`. SQLModel ORM + Pydantic schemas in the same file per model.
 - `PriceRecord`: commodity, province, city, price (`Decimal(10,4)` IDR), unit, price_level, source_url
 - `AlertRecord`: alert_type (pest/disease/weather), severity, pest_name, province, regency
 - `Advisory`: signal_category, advisory_text_en, advisory_text_id, confidence, sources (JSON URLs), agent_trace (JSON full tool call history)
