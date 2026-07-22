@@ -1,83 +1,103 @@
-import * as React from "react"
+"use client"
 
-import { SearchForm } from "@/components/search-form"
-import { VersionSwitcher } from "@/components/version-switcher"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-const data: {
-  versions: string[]
-  navMain: { title: string; url: string; items: { title: string; url: string; isActive?: boolean }[] }[]
-} = {
-  versions: ["1.0.0"],
-  navMain: [
-    {
-      title: "Overview",
-      url: "#",
-      items: [
-        { title: "Dashboard", url: "#", isActive: true },
-      ],
-    },
-    {
-      title: "Monitoring",
-      url: "#",
-      items: [
-        { title: "Weather Reports", url: "#" },
-        { title: "Pest Alerts", url: "#" },
-      ],
-    },
-    {
-      title: "Farm Tools",
-      url: "#",
-      items: [
-        { title: "Wholesale Prices", url: "#" },
-        { title: "Crop Calendar", url: "#" },
-        { title: "News Feed", url: "#" },
-        { title: "Farm Notes", url: "#" },
-      ],
-    },
-  ],
-}
+const NAV = [
+  {
+    label: "Monitoring",
+    items: [
+      { href: "/", label: "Dashboard" },
+      { href: "/weather", label: "Weather Reports" },
+      { href: "/pests", label: "Pest Alerts" },
+    ],
+  },
+  {
+    label: "Farm Tools",
+    items: [
+      { href: "/prices", label: "Wholesale Prices" },
+      { href: "/calendar", label: "Crop Calendar" },
+      { href: "/news", label: "News Feed" },
+      { href: "/notes", label: "Farm Notes" },
+    ],
+  },
+] as const
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar() {
+  const pathname = usePathname()
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href))
+
   return (
-    <Sidebar {...props}>
-      <SidebarHeader>
-        <VersionSwitcher
-          versions={data.versions}
-          defaultVersion={data.versions[0]}
-          name="AgriGuard"
-        />
-        <SearchForm />
+    <Sidebar collapsible="offcanvas">
+      <SidebarHeader className="h-14 justify-center border-b border-hairline px-5">
+        <div className="flex items-center gap-2.5">
+          <span className="size-3 bg-paddy" aria-hidden />
+          <span className="font-display text-[17px] font-semibold tracking-tight">
+            AgriSentinel
+          </span>
+        </div>
       </SidebarHeader>
-      <SidebarContent>
-        {data.navMain.map((item) => (
-          <SidebarGroup key={item.title}>
-            <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
+
+      <div className="border-b border-hairline px-5 py-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-2">Region</p>
+        <p className="mt-1 text-sm font-medium">Jawa Timur</p>
+      </div>
+
+      <SidebarContent className="px-3 py-5">
+        {NAV.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel className="px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-2">
+              {group.label}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
-                {item.items.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={item.isActive}>
-                      <a href={item.url}>{item.title}</a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+              <SidebarMenu className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active = isActive(item.href)
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={
+                          "block border-l-2 px-2 py-1.5 text-sm transition-colors " +
+                          (active
+                            ? "border-paddy bg-paper-2 font-semibold text-ink"
+                            : "border-transparent text-ink-2 hover:bg-paper-2 hover:text-ink")
+                        }
+                      >
+                        {item.label}
+                      </Link>
+                    </SidebarMenuItem>
+                  )
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
       </SidebarContent>
+
+      <SidebarFooter className="flex-row items-center gap-3 border-t border-hairline p-4">
+        <div className="flex size-8 items-center justify-center border border-hairline text-[11px] font-semibold tabular">
+          SK
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold leading-tight">Sujatmiko K.</p>
+          <p className="text-[10px] uppercase tracking-wider text-ink-2">Extension Officer</p>
+        </div>
+      </SidebarFooter>
+
       <SidebarRail />
     </Sidebar>
   )

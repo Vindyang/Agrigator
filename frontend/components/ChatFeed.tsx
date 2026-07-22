@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { AdvisoryCard } from "@/components/AdvisoryCard"
 import {
   advisorySocketUrl,
   type AdvisoryApi,
@@ -11,12 +10,6 @@ import {
   type ProvinceFilter,
   submitFeedback,
 } from "@/lib/api"
-
-type ChatFeedProps = {
-  province: ProvinceFilter
-  onAdvisoriesChange: (rows: AdvisoryApi[]) => void
-  onConnectionChange: (value: ConnectionState) => void
-}
 
 function compareByCreatedAt(a: AdvisoryApi, b: AdvisoryApi) {
   const ta = new Date(a.created_at).getTime()
@@ -43,10 +36,11 @@ function parseSocketMessage(raw: string): AdvisoryApi | null {
   return null
 }
 
-export function ChatFeed({ province, onAdvisoriesChange, onConnectionChange }: ChatFeedProps) {
+export function useAdvisoryFeed(province: ProvinceFilter) {
   const [advisories, setAdvisories] = useState<AdvisoryApi[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [connection, setConnection] = useState<ConnectionState>("connecting")
 
   const wsRef = useRef<WebSocket | null>(null)
   const connectRef = useRef<() => void>(() => {})
@@ -59,10 +53,6 @@ export function ChatFeed({ province, onAdvisoriesChange, onConnectionChange }: C
     () => (province === "ALL" ? advisories : advisories.filter((item) => item.province === province)),
     [advisories, province]
   )
-
-  useEffect(() => {
-    onAdvisoriesChange(visible)
-  }, [visible, onAdvisoriesChange])
 
   const clearTimers = useCallback(() => {
     if (reconnectRef.current) {
@@ -83,22 +73,22 @@ export function ChatFeed({ province, onAdvisoriesChange, onConnectionChange }: C
 
   const startPolling = useCallback(() => {
     if (pollRef.current) return
-    onConnectionChange("polling")
+    setConnection("polling")
     pollRef.current = window.setInterval(() => {
       void fetchSnapshot()
     }, 25000)
-  }, [fetchSnapshot, onConnectionChange])
+  }, [fetchSnapshot])
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return
-    onConnectionChange(attemptsRef.current === 0 ? "connecting" : "reconnecting")
+    setConnection(attemptsRef.current === 0 ? "connecting" : "reconnecting")
 
     const ws = new WebSocket(advisorySocketUrl())
     wsRef.current = ws
 
     ws.onopen = () => {
       attemptsRef.current = 0
-      onConnectionChange("connected")
+      setConnection("connected")
       if (pollRef.current) {
         window.clearInterval(pollRef.current)
         pollRef.current = null
@@ -122,11 +112,11 @@ export function ChatFeed({ province, onAdvisoriesChange, onConnectionChange }: C
       if (!mountedRef.current) return
       attemptsRef.current += 1
       startPolling()
-      onConnectionChange("disconnected")
+      setConnection("disconnected")
       const wait = Math.min(15000, 1000 * attemptsRef.current)
       reconnectRef.current = window.setTimeout(() => connectRef.current(), wait)
     }
-  }, [onConnectionChange, province, startPolling])
+  }, [province, startPolling])
 
   useEffect(() => {
     connectRef.current = connect
@@ -137,6 +127,7 @@ export function ChatFeed({ province, onAdvisoriesChange, onConnectionChange }: C
     clearTimers()
 
     const initTimer = window.setTimeout(() => {
+      connect()
       void fetchSnapshot()
         .catch(() => {
           setError("Failed to load initial advisories from server.")
@@ -145,8 +136,6 @@ export function ChatFeed({ province, onAdvisoriesChange, onConnectionChange }: C
           if (mountedRef.current) setLoading(false)
         })
     }, 0)
-
-    connect()
 
     return () => {
       mountedRef.current = false
@@ -172,28 +161,5 @@ export function ChatFeed({ province, onAdvisoriesChange, onConnectionChange }: C
     }
   }
 
-  return (
-    <section className="space-y-4">
-      <div className="rounded-lg border border-border bg-muted-soft px-3 py-2 text-xs text-muted-foreground">
-        {error ?? "Advisories update automatically."}
-      </div>
-
-      {loading && <p className="text-sm text-muted-foreground">Loading advisories...</p>}
-
-      {!loading && visible.length === 0 && (
-        <div className="rounded-xl border border-border bg-card p-6 text-sm">
-          <p className="font-semibold">No advisories yet</p>
-          <p className="mt-1 text-muted-foreground">
-            Run the agent to receive the latest advisories for the selected province.
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-4">
-        {visible.map((advisory) => (
-          <AdvisoryCard key={advisory.id} advisory={advisory} onFeedback={handleFeedback} />
-        ))}
-      </div>
-    </section>
-  )
+  return { advisories: visible, loading, error, connection, handleFeedback }
 }
