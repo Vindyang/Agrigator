@@ -1,5 +1,6 @@
 "use client"
 
+import { Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -87,6 +88,19 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+
+      <div className="border-t border-hairline px-3 py-3">
+        <Link
+          href="/settings"
+          className={
+            "flex items-center gap-2 px-2 py-1.5 text-sm transition-colors " +
+            (isActive("/settings") ? "font-semibold text-ink" : "text-ink-2 hover:text-ink")
+          }
+        >
+          <Settings className="size-4" />
+          Settings
+        </Link>
+      </div>
 
       <SidebarFooter className="flex-row items-center gap-3 border-t border-hairline p-4">
         <div className="flex size-8 items-center justify-center border border-hairline text-[11px] font-semibold tabular">

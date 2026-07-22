@@ -77,10 +77,7 @@ export function PageHeader({
           {subtitle && <p className="mt-2 max-w-2xl text-sm text-ink-2">{subtitle}</p>}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-4">
-        {right}
-        <DensityToggle />
-      </div>
+      <div className="flex shrink-0 items-center gap-4">{right}</div>
     </header>
   )
 }
