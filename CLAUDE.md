@@ -32,11 +32,11 @@ python -m scripts.seed_demo_data
 
 ```bash
 cd frontend
-npm install
-npm run dev        # http://localhost:3000
-npm run build
-npm run lint
-npm run typecheck  # tsc --noEmit
+pnpm install
+pnpm run dev        # http://localhost:3000
+pnpm run build
+pnpm run lint
+pnpm run typecheck  # tsc --noEmit
 ```
 
 Frontend env var: `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8000`)
@@ -76,13 +76,14 @@ Uses **Groq API** (`llama-3.3-70b-versatile`) via OpenAI-compatible endpoint (`h
 Jawa Barat (`-6.9175, 107.6191`), Jawa Tengah (`-7.1510, 110.1403`), Jawa Timur (`-7.5361, 112.2384`), Sulawesi Selatan (`-5.1477, 119.4327`), Sumatera Utara (`3.5952, 98.6722`)
 
 ### Frontend (`frontend/`)
-Next.js 16.1.7 App Router with React 19 + Tailwind CSS 4 + shadcn/ui.
+Next.js 16.1.7 App Router with React 19 + Tailwind CSS 4. Visual system is a bespoke "editorial farm ops" look (paper/ink palette, hairline borders, sharp corners, Instrument Sans display type) defined in `app/globals.css` and `components/ui-kit.tsx` — not shadcn `Card`/`Button` for page content. Seven pages: Dashboard (`/`, live data), Weather Reports (`/weather`), Pest Alerts (`/pests`), Wholesale Prices (`/prices`), Crop Calendar (`/calendar`), News Feed (`/news`), Farm Notes (`/notes`). Only the Dashboard is backed by real data; the other six use illustrative mock data pending backend endpoints for prices/weather/pests.
 
-Key components:
-- `ChatFeed.tsx` — real-time advisory feed; WebSocket primary, 25s polling fallback with exponential backoff reconnect
-- `AdvisoryCard.tsx` — signal badge, mini SVG charts (7-day price + 72h weather), feedback buttons
-- `StatusBar.tsx` — province selector, Run Agent button, connection status
-- `lib/api.ts` — typed API client (`AdvisoryApi`, `HealthApi`) and WebSocket URL helper
+Key files:
+- `components/ui-kit.tsx` — shared page primitives (`PageHeader`, `Panel`, `SignalPill`, `Sparkline`, `Delta`, density toggle) used across all pages
+- `components/app-sidebar.tsx` — Monitoring / Farm Tools navigation, built on shadcn `Sidebar` primitives
+- `components/ChatFeed.tsx` — `useAdvisoryFeed(province)` hook: owns the live advisory WebSocket connection (primary) with 25s polling fallback and exponential-backoff reconnect; consumed only by the Dashboard
+- `lib/advisory.ts` — pure helpers for the Dashboard: deterministic sparkline series from `price_change_pct`/`confidence`, `agent_trace` source parsing, signal-category → UI-kind mapping
+- `lib/api.ts` — typed API client (`AdvisoryApi`, `HealthApi`, `listAdvisories`, `runAgent`, `submitFeedback`, `advisorySocketUrl`)
 
 ## Incomplete Parts
 - `.env.example` — not yet created
