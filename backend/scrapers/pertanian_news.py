@@ -2,7 +2,7 @@
 Kementan (Ministry of Agriculture) news scraper.
 
 Primary:    httpx + BeautifulSoup on pertanian.go.id (fast, official source)
-Supplement: TinyFish search_web for broader agricultural news from across the web
+Supplement: Google News RSS for broader agricultural news from across the web
             (runs in parallel, adds context from media like Kompas, Katadata, etc.)
 
 Return shape: [{"title": str, "url": str, "snippet": str, "published_at": str | None}]
@@ -94,7 +94,7 @@ def _filter(articles: list[dict], query: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# TinyFish — scrape Antara News agricultural section
+# Google News RSS — broader agricultural news search
 # ---------------------------------------------------------------------------
 
 _GNEWS_RSS = (
@@ -172,7 +172,7 @@ async def scrape_pertanian_news(query: str = "") -> list[dict]:
     """
     Fetch agricultural news articles.
 
-    Runs httpx+BeautifulSoup (pertanian.go.id) and TinyFish search_web in parallel.
+    Runs httpx+BeautifulSoup (pertanian.go.id) and Google News RSS in parallel.
     Results are combined and deduplicated by URL.
     Returns [] on total failure — agent loop must tolerate missing news context.
     """

@@ -13,6 +13,7 @@ from backend import cache, scheduler
 from backend.agents import orchestrator
 from backend.database import create_db_and_tables, get_session
 from backend.models.advisory import Advisory
+from backend.scrapers.kemendag_prices import KEMENDAG_COMMODITIES
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +94,21 @@ async def health(session: Session):
 
 class RunRequest(BaseModel):
     province: str
-    commodity: str = "beras"
+    commodity: str | None = None
 
 
-@app.post("/agent/run", response_model=Advisory)
+@app.post("/agent/run", response_model=list[Advisory])
 async def agent_run(body: RunRequest, session: Session):
-    return await orchestrator.run(session, body.province, body.commodity)
+    commodities = [body.commodity] if body.commodity else list(KEMENDAG_COMMODITIES)
+
+    advisories: list[Advisory] = []
+    for commodity in commodities:
+        try:
+            advisories.append(await orchestrator.run(session, body.province, commodity))
+        except Exception:
+            logger.warning("Agent run failed for %s/%s", body.province, commodity, exc_info=True)
+
+    return advisories
 
 
 @app.get("/advisories", response_model=list[Advisory])

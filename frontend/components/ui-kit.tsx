@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState } from "react"
+import ReactMarkdown, { type Components } from "react-markdown"
 
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -112,11 +113,16 @@ export function Panel({
   )
 }
 
-export function SignalPill({ kind }: { kind: "urgent" | "monitor" | "opportunity" }) {
+export function SignalPill({
+  kind,
+}: {
+  kind: "urgent" | "monitor" | "opportunity" | "quiet"
+}) {
   const map = {
     urgent: { c: "text-clay border-clay/40 bg-clay/[0.06]", label: "Urgent Action" },
     monitor: { c: "text-dusk border-dusk/40 bg-dusk/[0.06]", label: "Monitor" },
     opportunity: { c: "text-turmeric border-turmeric/40 bg-turmeric/[0.06]", label: "Opportunity" },
+    quiet: { c: "text-ink-2 border-hairline", label: "Quiet" },
   }[kind]
   return (
     <span
@@ -174,5 +180,35 @@ export function Sparkline({
         strokeLinecap="round"
       />
     </svg>
+  )
+}
+
+const MARKDOWN_COMPONENTS: Components = {
+  p: ({ children }) => <p className="text-sm leading-relaxed">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  ul: ({ children }) => <ul className="list-disc space-y-1 pl-5 text-sm">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5 text-sm">{children}</ol>,
+  li: ({ children }) => <li className="leading-snug">{children}</li>,
+  h1: ({ children }) => <p className="font-display text-base font-semibold">{children}</p>,
+  h2: ({ children }) => <p className="font-display text-base font-semibold">{children}</p>,
+  h3: ({ children }) => <p className="font-display text-sm font-semibold">{children}</p>,
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-paddy underline hover:no-underline"
+    >
+      {children}
+    </a>
+  ),
+}
+
+export function MarkdownText({ children, className = "" }: { children: string; className?: string }) {
+  return (
+    <div className={"space-y-3 " + className}>
+      <ReactMarkdown components={MARKDOWN_COMPONENTS}>{children}</ReactMarkdown>
+    </div>
   )
 }

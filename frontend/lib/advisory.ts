@@ -1,9 +1,23 @@
 import type { AdvisoryApi } from "@/lib/api"
 
 export type SourceItem = {
+  type?: string
   label: string
   url: string
   timestamp?: string
+}
+
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/^[-*+]\s+/gm, "")
+    .replace(/^\d+\.\s+/gm, "")
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+    .replace(/\n{2,}/g, " ")
+    .replace(/\n/g, " ")
+    .trim()
 }
 
 export function formatTimestamp(value?: string | null) {
@@ -16,22 +30,32 @@ export function formatTimestamp(value?: string | null) {
   }).format(date)
 }
 
-function hashSeed(input: number) {
-  const x = Math.sin(input * 127.1) * 10000
-  return x - Math.floor(x)
+export type WeatherSnapshot = {
+  precipitationMm?: number
+  windKmh?: number
+  hasRainAlert?: boolean
 }
 
-export function buildPriceSeries(advisory: AdvisoryApi) {
-  const points = 7
-  const pct = advisory.price_change_pct ?? (advisory.confidence - 0.5) * 16
-  const start = 100
-  const end = start * (1 + pct / 100)
-  return Array.from({ length: points }, (_, i) => {
-    const t = i / (points - 1)
-    const drift = start + (end - start) * t
-    const wobble = (hashSeed(advisory.id + i) - 0.5) * 1.5
-    return Math.max(1, drift + wobble)
-  })
+export function extractWeather(advisory: AdvisoryApi): WeatherSnapshot | null {
+  const trace = advisory.agent_trace
+  if (!trace || typeof trace !== "object") return null
+
+  const steps = trace.steps
+  if (!Array.isArray(steps)) return null
+
+  const weatherStep = steps.find(
+    (step): step is Record<string, unknown> =>
+      Boolean(step) && typeof step === "object" && (step as Record<string, unknown>).tool === "get_weather"
+  )
+  const result = weatherStep?.result
+  if (!result || typeof result !== "object") return null
+
+  const r = result as Record<string, unknown>
+  return {
+    precipitationMm: typeof r.precipitation_mm === "number" ? r.precipitation_mm : undefined,
+    windKmh: typeof r.wind_kmh === "number" ? r.wind_kmh : undefined,
+    hasRainAlert: typeof r.has_rain_alert === "boolean" ? r.has_rain_alert : undefined,
+  }
 }
 
 export function extractSources(advisory: AdvisoryApi): SourceItem[] {
@@ -61,6 +85,7 @@ export function extractSources(advisory: AdvisoryApi): SourceItem[] {
               : ""
         if (!url) return null
         return {
+          type: typeof record.type === "string" ? record.type : undefined,
           label:
             typeof record.title === "string"
               ? record.title
@@ -83,7 +108,7 @@ export function extractSources(advisory: AdvisoryApi): SourceItem[] {
 
 export function mapSignalKind(
   category: AdvisoryApi["signal_category"]
-): "urgent" | "monitor" | "opportunity" | null {
+): "urgent" | "monitor" | "opportunity" | "quiet" {
   switch (category) {
     case "URGENT_ACTION":
       return "urgent"
@@ -92,6 +117,6 @@ export function mapSignalKind(
     case "OPPORTUNITY":
       return "opportunity"
     default:
-      return null
+      return "quiet"
   }
 }

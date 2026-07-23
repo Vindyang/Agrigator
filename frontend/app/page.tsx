@@ -3,8 +3,14 @@
 import { useMemo, useState } from "react"
 
 import { useAdvisoryFeed } from "@/components/ChatFeed"
-import { PageHeader, SignalPill, Sparkline } from "@/components/ui-kit"
-import { buildPriceSeries, extractSources, formatTimestamp, mapSignalKind } from "@/lib/advisory"
+import { MarkdownText, PageHeader, SignalPill } from "@/components/ui-kit"
+import {
+  extractSources,
+  extractWeather,
+  formatTimestamp,
+  mapSignalKind,
+  stripMarkdown,
+} from "@/lib/advisory"
 import { type AdvisoryApi, type ConnectionState, type ProvinceFilter, runAgent } from "@/lib/api"
 
 const PROVINCES: ProvinceFilter[] = [
@@ -28,7 +34,15 @@ const SIGNAL_STYLE = {
   urgent: { text: "text-clay", border: "border-l-clay", bg: "bg-clay/[0.03]" },
   monitor: { text: "text-dusk", border: "border-l-dusk", bg: "bg-dusk/[0.03]" },
   opportunity: { text: "text-turmeric", border: "border-l-turmeric", bg: "bg-turmeric/[0.03]" },
+  quiet: { text: "text-ink-2", border: "border-l-hairline", bg: "" },
 } as const
+
+const QUEUE_PRIORITY: Record<ReturnType<typeof mapSignalKind>, number> = {
+  urgent: 0,
+  monitor: 1,
+  opportunity: 2,
+  quiet: 3,
+}
 
 export default function DashboardPage() {
   const [province, setProvince] = useState<ProvinceFilter>("ALL")
@@ -39,15 +53,20 @@ export default function DashboardPage() {
   const { advisories, loading, error, connection, handleFeedback } = useAdvisoryFeed(province)
 
   const queue = useMemo(
-    () => advisories.filter((advisory) => mapSignalKind(advisory.signal_category) !== null),
+    () =>
+      [...advisories].sort(
+        (a, b) =>
+          QUEUE_PRIORITY[mapSignalKind(a.signal_category)] -
+          QUEUE_PRIORITY[mapSignalKind(b.signal_category)]
+      ),
     [advisories]
   )
-  const quietCount = advisories.length - queue.length
+  const quietCount = advisories.filter((a) => mapSignalKind(a.signal_category) === "quiet").length
 
   const counts = {
-    urgent: queue.filter((a) => mapSignalKind(a.signal_category) === "urgent").length,
-    monitor: queue.filter((a) => mapSignalKind(a.signal_category) === "monitor").length,
-    opportunity: queue.filter((a) => mapSignalKind(a.signal_category) === "opportunity").length,
+    urgent: advisories.filter((a) => mapSignalKind(a.signal_category) === "urgent").length,
+    monitor: advisories.filter((a) => mapSignalKind(a.signal_category) === "monitor").length,
+    opportunity: advisories.filter((a) => mapSignalKind(a.signal_category) === "opportunity").length,
   }
 
   const selected = queue.find((a) => a.id === selectedId) ?? queue[0] ?? null
@@ -55,8 +74,9 @@ export default function DashboardPage() {
   async function handleRunAgent() {
     setIsRunning(true)
     try {
-      await runAgent(province)
-      setLastRunText(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }))
+      const results = await runAgent(province)
+      const time = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+      setLastRunText(`${time} (${results.length} advisories)`)
     } catch {
       setLastRunText("Run failed")
     } finally {
@@ -184,9 +204,7 @@ function AdvisoryRow({
   onSelect: () => void
 }) {
   const kind = mapSignalKind(advisory.signal_category)
-  if (!kind) return null
   const s = SIGNAL_STYLE[kind]
-  const series = buildPriceSeries(advisory)
 
   return (
     <button
@@ -205,17 +223,15 @@ function AdvisoryRow({
         <p className="mt-0.5 text-[10px] uppercase tracking-wider text-ink-2">{advisory.province}</p>
       </div>
 
-      <div className="w-36 shrink-0">
+      <div className="w-24 shrink-0">
         <p className={"font-display tabular text-2xl font-semibold " + s.text}>
           {Math.round(advisory.confidence * 100)}%
         </p>
-        <div className={"mt-1 " + s.text}>
-          <Sparkline data={series} width={110} height={22} />
-        </div>
+        <p className="mt-0.5 text-[10px] uppercase tracking-wider text-ink-2">Confidence</p>
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-sm leading-snug">{advisory.advisory_text_en}</p>
+        <p className="line-clamp-2 text-sm leading-snug">{stripMarkdown(advisory.advisory_text_en)}</p>
       </div>
     </button>
   )
@@ -229,8 +245,10 @@ function DetailPanel({
   onFeedback: (id: number, helpful: boolean) => Promise<void>
 }) {
   const kind = mapSignalKind(advisory.signal_category)
-  const series = buildPriceSeries(advisory)
+  const weather = extractWeather(advisory)
   const sources = extractSources(advisory)
+  const priceSourceNum = sources.findIndex((s) => s.type === "price") + 1
+  const weatherSourceNum = sources.findIndex((s) => s.type === "weather") + 1
   const [pending, setPending] = useState<"up" | "down" | null>(null)
 
   async function submit(helpful: boolean) {
@@ -246,7 +264,7 @@ function DetailPanel({
     <aside className="animate-slide-in-right space-y-8 bg-paper p-6">
       <header className="space-y-3">
         <div className="flex items-center gap-2">
-          {kind && <SignalPill kind={kind} />}
+          <SignalPill kind={kind} />
           <span className="tabular text-[10px] font-medium uppercase tracking-widest text-ink-2">
             #{advisory.id}
           </span>
@@ -254,25 +272,43 @@ function DetailPanel({
         <h2 className="font-display text-2xl font-semibold leading-tight">
           {advisory.commodity} — {advisory.province}
         </h2>
-        <p className="text-sm text-ink-2">{advisory.advisory_text_en}</p>
+        <MarkdownText className="text-ink-2">{advisory.advisory_text_en}</MarkdownText>
       </header>
 
       <div className="space-y-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em]">Trend</h3>
-        <div className="border border-hairline p-4 text-ink">
-          <Sparkline data={series} width={320} height={80} />
-        </div>
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em]">Conditions</h3>
         <div className="grid grid-cols-2 border border-hairline">
-          <div className="border-r border-hairline p-3">
+          <div className="border-r border-b border-hairline p-3">
             <p className="text-[10px] uppercase tracking-wider text-ink-2">Confidence</p>
             <p className="font-display tabular text-xl font-semibold">
               {Math.round(advisory.confidence * 100)}%
             </p>
           </div>
-          <div className="p-3">
-            <p className="text-[10px] uppercase tracking-wider text-ink-2">Price change</p>
+          <div className="border-b border-hairline p-3">
+            <p className="text-[10px] uppercase tracking-wider text-ink-2">
+              Price change
+              {priceSourceNum > 0 && <CitationMark num={priceSourceNum} />}
+            </p>
             <p className="font-display tabular text-xl font-semibold">
               {advisory.price_change_pct != null ? `${advisory.price_change_pct.toFixed(1)}%` : "-"}
+            </p>
+          </div>
+          <div className="border-r border-hairline p-3">
+            <p className="text-[10px] uppercase tracking-wider text-ink-2">
+              Rainfall (72h)
+              {weatherSourceNum > 0 && <CitationMark num={weatherSourceNum} />}
+            </p>
+            <p className="font-display tabular text-xl font-semibold">
+              {weather?.precipitationMm != null ? `${weather.precipitationMm.toFixed(1)} mm` : "-"}
+            </p>
+          </div>
+          <div className="p-3">
+            <p className="text-[10px] uppercase tracking-wider text-ink-2">
+              Wind
+              {weatherSourceNum > 0 && <CitationMark num={weatherSourceNum} />}
+            </p>
+            <p className="font-display tabular text-xl font-semibold">
+              {weather?.windKmh != null ? `${weather.windKmh.toFixed(1)} km/h` : "-"}
             </p>
           </div>
         </div>
@@ -286,7 +322,9 @@ function DetailPanel({
           <ul className="space-y-2 text-[11px]">
             {sources.map((source, index) => (
               <li key={`${source.url}-${index}`} className="border-b border-hairline pb-1.5">
-                <p className="font-semibold">{source.label}</p>
+                <p className="font-semibold">
+                  <span className="tabular text-ink-2">[{index + 1}]</span> {source.label}
+                </p>
                 <p className="break-all text-ink-2">{source.url}</p>
                 {source.timestamp && <p className="tabular text-ink-2">{formatTimestamp(source.timestamp)}</p>}
               </li>
@@ -319,4 +357,8 @@ function DetailPanel({
       </p>
     </aside>
   )
+}
+
+function CitationMark({ num }: { num: number }) {
+  return <sup className="tabular ml-0.5 text-paddy">[{num}]</sup>
 }

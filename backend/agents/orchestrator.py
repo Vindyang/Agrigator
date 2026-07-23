@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents import advisory_generator, signal_detector, tools
-from backend.scrapers.tinyfish_client import TinyFishError
 from backend.models.advisory import Advisory, AdvisoryAlertLink, AdvisoryPriceLink, SignalCategory
 from backend.models.alert import AlertRecord
 from backend.models.price import PriceRecord
@@ -50,11 +49,7 @@ async def run(session: AsyncSession, province: str, commodity: str) -> Advisory:
             f"{commodity} gangguan pasokan distribusi",
         ]
         for hop, query in enumerate(hop_queries):
-            try:
-                results = await tools.search_news(query)
-            except TinyFishError:
-                logger.warning("TinyFish unavailable on hop %d — skipping news search", hop + 1)
-                break
+            results = await tools.search_news(query)
             trace.append({"tool": "search_news", "hop": hop + 1, "query": query, "result_count": len(results)})
             news_context.extend(results[:3])
             if len(news_context) >= 3:
@@ -79,6 +74,48 @@ async def run(session: AsyncSession, province: str, commodity: str) -> Advisory:
     text_id = await advisory_generator.translate_advisory(text_en)
     trace.append({"tool": "generate_advisory", "text_en_len": len(text_en)})
 
+    # --- Real price history (for the trend chart — not synthesized) ---
+    price_history = [{"date": p["date"], "price": p["price"]} for p in prices]
+
+    # --- Sources actually consulted for this advisory ---
+    now_iso = datetime.now(timezone.utc).isoformat()
+    sources: list[dict] = []
+    if prices and prices[0].get("source_url"):
+        sources.append({
+            "type": "price",
+            "label": f"Wholesale Price — {commodity.replace('_', ' ').title()}",
+            "url": prices[0]["source_url"],
+            "timestamp": now_iso,
+        })
+    if weather.get("source_url"):
+        sources.append({
+            "type": "weather",
+            "label": f"Weather Forecast — {weather.get('province', province)}",
+            "url": weather["source_url"],
+            "timestamp": now_iso,
+        })
+    seen_urls = {s["url"] for s in sources}
+    for alert in alerts:
+        url = alert.get("source_url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            sources.append({
+                "type": "alert",
+                "label": alert.get("pest_name") or alert.get("alert_type") or "Pest & Disease Alert",
+                "url": url,
+                "timestamp": alert.get("published_at") or now_iso,
+            })
+    for item in news_context:
+        url = item.get("url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            sources.append({
+                "type": "news",
+                "label": item.get("title") or "Kementan Agricultural News",
+                "url": url,
+                "timestamp": item.get("published_at") or now_iso,
+            })
+
     # --- Step 6: Persist advisory ---
     advisory = Advisory(
         signal_category=signal,
@@ -89,7 +126,7 @@ async def run(session: AsyncSession, province: str, commodity: str) -> Advisory:
         confidence=confidence,
         price_change_pct=pct_change if is_anomaly else None,
         expires_at=datetime.now(timezone.utc) + timedelta(hours=6),
-        agent_trace={"steps": trace},
+        agent_trace={"steps": trace, "sources": sources, "price_history": price_history},
     )
     session.add(advisory)
     await session.flush()   # get advisory.id without committing

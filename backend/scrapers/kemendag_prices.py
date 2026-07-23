@@ -31,7 +31,7 @@ _HEADERS = {
 }
 
 # komoditas_id → internal name (from /master/api/komoditas)
-_KOMODITAS_MAP: dict[int, str] = {
+KOMODITAS_MAP: dict[int, str] = {
     1: "beras",
     2: "gula",
     3: "minyak_goreng",
@@ -43,6 +43,8 @@ _KOMODITAS_MAP: dict[int, str] = {
     11: "cabai",
     12: "bawang_merah",
 }
+
+KEMENDAG_COMMODITIES: tuple[str, ...] = tuple(KOMODITAS_MAP.values())
 
 
 async def _get_latest_tanggal(client: httpx.AsyncClient) -> str:
@@ -81,7 +83,7 @@ async def scrape_kemendag_prices(province: str) -> list[PriceRecord]:
 
     for item in items:
         kid: int = item.get("komoditas_id", 0)
-        if kid not in _KOMODITAS_MAP or kid in seen:
+        if kid not in KOMODITAS_MAP or kid in seen:
             continue
         price_raw = item.get("hnt_penduduk") or item.get("hnt_sbh")
         if not price_raw:
@@ -99,7 +101,7 @@ async def scrape_kemendag_prices(province: str) -> list[PriceRecord]:
             price_date = date.today()
         records.append(
             PriceRecord(
-                commodity=_KOMODITAS_MAP[kid],
+                commodity=KOMODITAS_MAP[kid],
                 province=province,
                 city=province,
                 price=price,

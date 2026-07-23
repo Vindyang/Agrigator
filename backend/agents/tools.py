@@ -1,12 +1,11 @@
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.price import PriceRecord
 from backend.models.alert import AlertRecord
-from backend.scrapers import tinyfish_client
 
 logger = logging.getLogger(__name__)
 
@@ -18,22 +17,23 @@ async def get_prices(session: AsyncSession, province: str, commodity: str, days:
     """
     from backend.scrapers.kemendag_prices import scrape_kemendag_prices
 
-    # Only scrape if we have no record for today yet — avoids duplicate inserts on
-    # repeated agent runs within the same day.
-    today = date.today()
+    # Only scrape if we haven't scraped this commodity/province in the last hour —
+    # avoids duplicate inserts on repeated agent runs. Keyed on scraped_at rather than
+    # date_of_price, since KEMENDAG's "latest available" date is often a day behind
+    # the server's clock, which made a date_of_price == today check never match.
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
     existing = await session.exec(
         select(PriceRecord)
         .where(PriceRecord.province == province)
         .where(PriceRecord.commodity == commodity)
-        .where(PriceRecord.date_of_price == today)
+        .where(PriceRecord.scraped_at >= one_hour_ago)
         .limit(1)
     )
     if not existing.first():
         try:
             fresh = await scrape_kemendag_prices(province)
             for record in fresh:
-                if record.commodity == commodity:
-                    session.add(record)
+                session.add(record)
             await session.flush()
         except Exception:
             logger.warning("KEMENDAG scrape failed for %s/%s — using existing DB data", province, commodity)

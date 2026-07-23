@@ -66,10 +66,9 @@ export async function listAdvisories(province: ProvinceFilter): Promise<Advisory
   return res.json()
 }
 
-export async function runAgent(province: ProvinceFilter): Promise<AdvisoryApi> {
+export async function runAgent(province: ProvinceFilter): Promise<AdvisoryApi[]> {
   const payload = {
     province: province === "ALL" ? "Jawa Barat" : province,
-    commodity: "beras",
   }
 
   const res = await fetch(`${API_BASE}/agent/run`, {

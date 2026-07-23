@@ -12,7 +12,8 @@ _TRANSLATE_PROMPT = (
     "Translate the following agricultural advisory into Bahasa Indonesia. "
     "Use simple, clear language appropriate for Indonesian farmers with basic literacy. "
     "Preserve all numbers, commodity names (beras=rice, jagung=corn, kedelai=soybean, cabai=chili), "
-    "percentages, and action verbs accurately. Keep the translation concise and under 250 words."
+    "percentages, and action verbs accurately. Keep the translation concise and under 250 words. "
+    "Preserve any markdown formatting (bold, bullet lists) from the original."
 )
 
 
@@ -27,10 +28,15 @@ async def generate_advisory(
     confidence: float,
 ) -> str:
     """Generate a plain-language English advisory from the compound signal data."""
+    price_change_line = (
+        f"Price change: {price_change_pct:+.1f}% vs 7-day average\n"
+        if price_change_pct is not None
+        else "Price change: no significant change vs 7-day average\n"
+    )
     context = (
         f"Signal: {signal_category.value}\n"
         f"Commodity: {commodity} | Province: {province}\n"
-        f"Price change: {price_change_pct:+.1f}% vs 7-day average\n"
+        f"{price_change_line}"
         f"Weather (72h): precipitation={weather_data.get('precipitation_mm', 0)}mm, "
         f"wind={weather_data.get('wind_kmh', 0)}km/h\n"
         f"Active alerts: {len(alerts)}\n"
@@ -46,7 +52,9 @@ async def generate_advisory(
     prompt = (
         "You are an Indonesian agricultural intelligence analyst. "
         "Based on the following signal data, write a concise, actionable advisory (under 200 words) "
-        "for smallholder farmers. Be specific about what action to take and why.\n\n"
+        "for smallholder farmers. Be specific about what action to take and why. "
+        "You may use light markdown formatting (bold for the key action, short bullet lists) "
+        "where it makes the advisory easier to scan.\n\n"
         + context
     )
 
