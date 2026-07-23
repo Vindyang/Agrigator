@@ -1,25 +1,10 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import { PageHeader, Panel } from "@/components/ui-kit"
+import { fetchNews, type NewsItemApi } from "@/lib/api"
 
-type Item = {
-  id: string
-  category: "Policy" | "Market" | "Weather" | "Research" | "Cooperative"
-  source: string
-  title: string
-  summary: string
-  time: string
-  featured?: boolean
-}
-
-const NEWS: Item[] = [
-  { id: "n1", category: "Policy", source: "Ministry of Agriculture", title: "Fertilizer subsidy allocation expanded for smallholder rice growers", summary: "New allocation targets plots under 2 ha in East Java, effective for the upcoming wet season. Registration through cooperative offices opens next week.", time: "2 hrs ago", featured: true },
-  { id: "n2", category: "Market", source: "Kramat Jati Wholesale", title: "Chili prices climb 12% amid tighter regional supply", summary: "Weekly settled prices for bird's-eye chili rose to Rp 74,500/kg on lower arrivals from West Java.", time: "4 hrs ago" },
-  { id: "n3", category: "Weather", source: "BMKG", title: "Above-average rainfall forecast for East Java region through October", summary: "Regional forecast points to a wetter-than-normal transition period. Growers advised to plan drainage now.", time: "6 hrs ago" },
-  { id: "n4", category: "Research", source: "IPB University", title: "Trial shows resistant shallot line halves Fusarium incidence", summary: "A three-season trial across four cooperatives reports significant reduction in wilt at comparable yield.", time: "Yesterday" },
-  { id: "n5", category: "Cooperative", source: "Koperasi Tani Makmur", title: "3-month forward contract offered on red onion at Rp 34,000/kg", summary: "Contract window open through the end of the month for cooperative members.", time: "Yesterday" },
-  { id: "n6", category: "Market", source: "ICE + broker feed", title: "Arabica futures firm on European buyer demand for grade G1", summary: "Broker-reported physical premium widens; consolidation of warehouse stock recommended by cooperative desk.", time: "2 days ago" },
-]
-
-const CAT_COLOR: Record<Item["category"], string> = {
+const CAT_COLOR: Record<string, string> = {
   Policy: "text-paddy border-paddy/40 bg-paddy/[0.06]",
   Market: "text-turmeric border-turmeric/40 bg-turmeric/[0.06]",
   Weather: "text-dusk border-dusk/40 bg-dusk/[0.06]",
@@ -27,9 +12,107 @@ const CAT_COLOR: Record<Item["category"], string> = {
   Cooperative: "text-clay border-clay/40 bg-clay/[0.06]",
 }
 
+const FALLBACK_CAT_COLOR = "text-ink-2 border-hairline bg-paper-2"
+
+function catColor(category: string): string {
+  return CAT_COLOR[category] ?? FALLBACK_CAT_COLOR
+}
+
+function timeAgo(publishedAt: string | null): string {
+  if (!publishedAt) return "Unknown"
+  const now = Date.now()
+  const then = new Date(publishedAt).getTime()
+  const diffMs = now - then
+  const diffHrs = Math.floor(diffMs / (1000 * 60 * 60))
+  if (diffHrs < 1) return "Just now"
+  if (diffHrs < 24) return `${diffHrs} hr${diffHrs > 1 ? "s" : ""} ago`
+  const diffDays = Math.floor(diffHrs / 24)
+  if (diffDays === 1) return "Yesterday"
+  if (diffDays < 7) return `${diffDays} days ago`
+  return new Date(publishedAt).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+
 export default function NewsPage() {
-  const featured = NEWS.find((n) => n.featured)!
-  const rest = NEWS.filter((n) => !n.featured)
+  const [news, setNews] = useState<NewsItemApi[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchNews()
+      .then((data) => {
+        if (!cancelled) setNews(data)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load news")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // --- loading state ---
+  if (news === null && error === null) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Farm Tools"
+          title="News Feed"
+          subtitle="Policy, market, weather, and research updates from vetted sources."
+        />
+        <div className="p-8 text-sm text-ink-2">Loading news…</div>
+      </>
+    )
+  }
+
+  // --- error state ---
+  if (error) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Farm Tools"
+          title="News Feed"
+          subtitle="Policy, market, weather, and research updates from vetted sources."
+        />
+        <div className="p-8">
+          <Panel>
+            <div className="p-8 text-center">
+              <p className="font-semibold text-clay">Could not load news</p>
+              <p className="mt-1 text-sm text-ink-2">{error}</p>
+            </div>
+          </Panel>
+        </div>
+      </>
+    )
+  }
+
+  // --- empty state ---
+  if (news!.length === 0) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Farm Tools"
+          title="News Feed"
+          subtitle="Policy, market, weather, and research updates from vetted sources."
+        />
+        <div className="p-8">
+          <Panel>
+            <div className="p-8 text-center text-sm text-ink-2">
+              No news articles available.
+            </div>
+          </Panel>
+        </div>
+      </>
+    )
+  }
+
+  // --- data ---
+  const featured = news![0]
+  const rest = news!.slice(1)
 
   return (
     <>
@@ -39,37 +122,67 @@ export default function NewsPage() {
         subtitle="Policy, market, weather, and research updates from vetted sources."
       />
 
-      <div className="p-8 grid grid-cols-[1.4fr_1fr] gap-6">
+      <div className="grid grid-cols-[1.4fr_1fr] gap-6 p-8">
         <Panel>
           <article className="p-8">
-            <div className="flex items-center gap-3 mb-4">
-              <span className={"inline-block px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest border " + CAT_COLOR[featured.category]}>
+            <div className="mb-4 flex items-center gap-3">
+              <span
+                className={
+                  "inline-block border px-2 py-0.5 text-[10px] font-semibold tracking-widest uppercase " +
+                  catColor(featured.category)
+                }
+              >
                 {featured.category}
               </span>
-              <span className="text-[10px] uppercase tracking-widest text-ink-2 tabular">
-                {featured.source} · {featured.time}
+              <span className="tabular text-[10px] tracking-widest text-ink-2 uppercase">
+                {featured.source} · {timeAgo(featured.published_at)}
               </span>
             </div>
-            <h2 className="font-display text-3xl font-semibold leading-tight tracking-tight text-balance">
+            <a
+              href={featured.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-display text-3xl leading-tight font-semibold tracking-tight text-balance transition-colors hover:text-paddy"
+            >
               {featured.title}
-            </h2>
-            <p className="mt-4 text-base text-ink-2 leading-relaxed max-w-2xl">{featured.summary}</p>
+            </a>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-2">
+              {featured.snippet}
+            </p>
           </article>
         </Panel>
 
         <div className="space-y-4">
-          {rest.map((n) => (
-            <Panel key={n.id}>
+          {rest.map((n, i) => (
+            <Panel key={n.url || i}>
               <article className="p-5">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className={"inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest border " + CAT_COLOR[n.category]}>
+                <div className="mb-2 flex items-center gap-3">
+                  <span
+                    className={
+                      "inline-block border px-1.5 py-0.5 text-[10px] font-semibold tracking-widest uppercase " +
+                      catColor(n.category)
+                    }
+                  >
                     {n.category}
                   </span>
-                  <span className="text-[10px] uppercase tracking-widest text-ink-2 tabular">{n.source}</span>
-                  <span className="ml-auto text-[10px] tabular text-ink-2">{n.time}</span>
+                  <span className="tabular text-[10px] tracking-widest text-ink-2 uppercase">
+                    {n.source}
+                  </span>
+                  <span className="tabular ml-auto text-[10px] text-ink-2">
+                    {timeAgo(n.published_at)}
+                  </span>
                 </div>
-                <h3 className="font-display text-base font-semibold leading-tight">{n.title}</h3>
-                <p className="mt-1.5 text-xs text-ink-2 leading-relaxed">{n.summary}</p>
+                <a
+                  href={n.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-display text-base leading-tight font-semibold transition-colors hover:text-paddy"
+                >
+                  {n.title}
+                </a>
+                <p className="mt-1.5 text-xs leading-relaxed text-ink-2">
+                  {n.snippet}
+                </p>
               </article>
             </Panel>
           ))}

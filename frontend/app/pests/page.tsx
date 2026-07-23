@@ -1,28 +1,49 @@
 "use client"
 
-import { PageHeader, Panel, SignalPill, Sparkline, useDensity } from "@/components/ui-kit"
+import { useEffect, useState } from "react"
+import {
+  PageHeader,
+  Panel,
+  SignalPill,
+  Sparkline,
+  useDensity,
+} from "@/components/ui-kit"
+import { fetchAlerts } from "@/lib/api"
+import type { AlertApi } from "@/lib/api"
 
-type Alert = {
-  id: string
-  crop: string
-  pest: string
-  risk: number
-  signal: "urgent" | "monitor" | "opportunity"
-  region: string
-  recommendation: string
-  confidence: number
-  updated: string
-  trend: number[]
+// ── severity helpers ──────────────────────────────────────────────
+
+const SEVERITY_RISK: Record<string, number> = {
+  critical: 90,
+  high: 70,
+  medium: 50,
+  low: 20,
 }
 
-const ALERTS: Alert[] = [
-  { id: "P-0092", crop: "Shallot", pest: "Fusarium wilt", risk: 82, signal: "urgent", region: "Turirejo", recommendation: "Systemic fungicide + drainage", confidence: 94, updated: "12 min", trend: [30, 40, 55, 63, 72, 78, 82] },
-  { id: "P-0088", crop: "Bird's-Eye Chili", pest: "Anthracnose", risk: 71, signal: "urgent", region: "Sidodadi", recommendation: "Copper-based spray, remove infected fruit", confidence: 88, updated: "40 min", trend: [40, 44, 50, 55, 62, 68, 71] },
-  { id: "P-0086", crop: "Paddy", pest: "Brown planthopper", risk: 48, signal: "monitor", region: "Sub-basin 04", recommendation: "Scout weekly; hold treatment", confidence: 82, updated: "2 hrs", trend: [22, 26, 30, 35, 42, 46, 48] },
-  { id: "P-0084", crop: "Sweet Corn", pest: "Fall armyworm", risk: 32, signal: "monitor", region: "Mulyoasri", recommendation: "Maintain pheromone traps", confidence: 79, updated: "3 hrs", trend: [12, 14, 18, 22, 26, 30, 32] },
-  { id: "P-0079", crop: "Coffee", pest: "Berry borer", risk: 24, signal: "monitor", region: "Bromo slope", recommendation: "Sanitation harvest of fallen cherries", confidence: 76, updated: "6 hrs", trend: [10, 12, 14, 16, 20, 22, 24] },
-  { id: "P-0071", crop: "Red Onion", pest: "Thrips", risk: 12, signal: "monitor", region: "Turirejo", recommendation: "Population stable", confidence: 84, updated: "1 day", trend: [10, 11, 12, 13, 12, 11, 12] },
-]
+function severitySignal(severity: string): "urgent" | "monitor" | null {
+  if (severity === "critical" || severity === "high") return "urgent"
+  if (severity === "medium") return "monitor"
+  return null // low → no SignalPill
+}
+
+function severityRiskPct(severity: string): number {
+  return SEVERITY_RISK[severity] ?? 20
+}
+
+function titleCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins} min`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hr${hrs > 1 ? "s" : ""}`
+  const days = Math.floor(hrs / 24)
+  return `${days} day${days > 1 ? "s" : ""}`
+}
 
 function riskBar(risk: number) {
   if (risk >= 70) return "bg-clay"
@@ -30,11 +51,113 @@ function riskBar(risk: number) {
   return "bg-paddy"
 }
 
+function flatTrend(riskPct: number): number[] {
+  return Array.from({ length: 7 }, () => riskPct)
+}
+
+// ── KPI sub-component ─────────────────────────────────────────────
+
+function Kpi({
+  label,
+  value,
+  color,
+  isText,
+}: {
+  label: string
+  value: number | string
+  color: string
+  isText?: boolean
+}) {
+  return (
+    <div className="border-r border-hairline px-8 py-6 last:border-r-0">
+      <p
+        className={
+          "text-[10px] font-semibold tracking-[0.2em] uppercase " + color
+        }
+      >
+        {label}
+      </p>
+      <p
+        className={"tabular mt-2 font-display text-4xl font-semibold " + color}
+      >
+        {isText ? value : String(value).padStart(2, "0")}
+      </p>
+    </div>
+  )
+}
+
+// ── page component ────────────────────────────────────────────────
+
 export default function PestsPage() {
   const { density } = useDensity()
   const dense = density === "officer"
-  const urgent = ALERTS.filter((a) => a.signal === "urgent").length
-  const monitor = ALERTS.filter((a) => a.signal === "monitor").length
+
+  const [alerts, setAlerts] = useState<AlertApi[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        const data = await fetchAlerts(undefined, 168)
+        if (!cancelled) setAlerts(data)
+      } catch (err) {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Unknown error")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // ── derived KPI values ────────────────────────────────────────
+
+  const urgentCount = alerts.filter(
+    (a) => a.severity === "critical" || a.severity === "high"
+  ).length
+  const monitorCount = alerts.filter((a) => a.severity === "medium").length
+  const totalCount = alerts.length
+
+  // ── loading state ─────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Monitoring"
+          title="Pest Alerts"
+          subtitle="Active pest and disease risks across all monitored plots, ranked by severity."
+        />
+        <div className="p-8 text-sm text-ink-2">Loading alerts…</div>
+      </>
+    )
+  }
+
+  // ── error state ───────────────────────────────────────────────
+
+  if (error) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="Monitoring"
+          title="Pest Alerts"
+          subtitle="Active pest and disease risks across all monitored plots, ranked by severity."
+        />
+        <div className="p-8 text-sm text-clay">
+          Failed to load alerts: {error}
+        </div>
+      </>
+    )
+  }
+
+  // ── main content ──────────────────────────────────────────────
 
   return (
     <>
@@ -44,69 +167,96 @@ export default function PestsPage() {
         subtitle="Active pest and disease risks across all monitored plots, ranked by severity."
       />
 
-      <div className="grid grid-cols-4 border-b border-hairline">
-        <Kpi label="Urgent" value={urgent} color="text-clay" />
-        <Kpi label="Monitor" value={monitor} color="text-dusk" />
-        <Kpi label="Plots at risk" value={12} color="text-ink" />
-        <Kpi label="Avg. confidence" value="86%" color="text-ink" isText />
+      <div className="grid grid-cols-3 border-b border-hairline">
+        <Kpi label="Urgent" value={urgentCount} color="text-clay" />
+        <Kpi label="Monitor" value={monitorCount} color="text-dusk" />
+        <Kpi label="Plots at risk" value={totalCount} color="text-ink" />
       </div>
 
-      <div className="p-8 space-y-8">
-        <Panel title="Active alerts" meta={`${ALERTS.length} total`}>
-          <table className="w-full text-sm">
-            <thead className="border-b border-hairline">
-              <tr className="text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-2">
-                <th className="px-4 py-3">Signal</th>
-                <th className="px-4 py-3">Crop</th>
-                <th className="px-4 py-3">Pest / Disease</th>
-                <th className="px-4 py-3">Risk</th>
-                <th className="px-4 py-3">Trend</th>
-                <th className="px-4 py-3">Recommendation</th>
-                {dense && <th className="px-4 py-3 text-right">Conf.</th>}
-                {dense && <th className="px-4 py-3 text-right">Region</th>}
-                {dense && <th className="px-4 py-3 text-right">Updated</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {ALERTS.map((a) => (
-                <tr key={a.id} className="hover:bg-paper-2">
-                  <td className="px-4 py-3">
-                    <SignalPill kind={a.signal} />
-                  </td>
-                  <td className="px-4 py-3 font-semibold">{a.crop}</td>
-                  <td className="px-4 py-3">{a.pest}</td>
-                  <td className="px-4 py-3 w-48">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 bg-hairline">
-                        <div className={"h-full " + riskBar(a.risk)} style={{ width: `${a.risk}%` }} />
-                      </div>
-                      <span className="tabular font-semibold text-xs w-8 text-right">{a.risk}%</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-ink-2">
-                    <Sparkline data={a.trend} width={90} height={20} />
-                  </td>
-                  <td className="px-4 py-3 text-ink-2">{a.recommendation}</td>
-                  {dense && <td className="px-4 py-3 text-right tabular font-semibold">{a.confidence}%</td>}
-                  {dense && <td className="px-4 py-3 text-right text-xs">{a.region}</td>}
-                  {dense && <td className="px-4 py-3 text-right text-xs tabular text-ink-2">{a.updated}</td>}
+      {alerts.length === 0 ? (
+        <div className="p-8 text-sm text-ink-2">
+          No active alerts in the last 7 days.
+        </div>
+      ) : (
+        <div className="space-y-8 p-8">
+          <Panel title="Active alerts" meta={`${alerts.length} total`}>
+            <table className="w-full text-sm">
+              <thead className="border-b border-hairline">
+                <tr className="text-left text-[10px] font-semibold tracking-[0.15em] text-ink-2 uppercase">
+                  <th className="px-4 py-3">Signal</th>
+                  <th className="px-4 py-3">Crop</th>
+                  <th className="px-4 py-3">Pest / Disease</th>
+                  <th className="px-4 py-3">Risk</th>
+                  <th className="px-4 py-3">Trend</th>
+                  <th className="px-4 py-3">Recommendation</th>
+                  {dense && <th className="px-4 py-3 text-right">Region</th>}
+                  {dense && <th className="px-4 py-3 text-right">Updated</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      </div>
-    </>
-  )
-}
+              </thead>
+              <tbody className="divide-y divide-hairline">
+                {alerts.map((a) => {
+                  const sig = severitySignal(a.severity)
+                  const riskPct = severityRiskPct(a.severity)
+                  const cropLabel = a.pest_name ?? titleCase(a.alert_type)
+                  const pestLabel = titleCase(a.alert_type)
+                  const recommendation = a.description.slice(0, 100)
+                  const regionLabel = a.regency ?? a.province ?? "—"
+                  const updatedLabel = relativeTime(a.published_at)
 
-function Kpi({ label, value, color, isText }: { label: string; value: number | string; color: string; isText?: boolean }) {
-  return (
-    <div className="px-8 py-6 border-r border-hairline last:border-r-0">
-      <p className={"text-[10px] font-semibold uppercase tracking-[0.2em] " + color}>{label}</p>
-      <p className={"font-display text-4xl font-semibold tabular mt-2 " + color}>
-        {isText ? value : String(value).padStart(2, "0")}
-      </p>
-    </div>
+                  return (
+                    <tr key={a.id} className="hover:bg-paper-2">
+                      <td className="px-4 py-3">
+                        {sig ? (
+                          <SignalPill kind={sig} />
+                        ) : (
+                          <span className="text-[10px] font-semibold tracking-widest text-ink-2 uppercase">
+                            {a.severity}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-semibold">{cropLabel}</td>
+                      <td className="px-4 py-3">{pestLabel}</td>
+                      <td className="w-48 px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-1.5 flex-1 bg-hairline">
+                            <div
+                              className={"h-full " + riskBar(riskPct)}
+                              style={{ width: `${riskPct}%` }}
+                            />
+                          </div>
+                          <span className="tabular w-8 text-right text-xs font-semibold">
+                            {riskPct}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-ink-2">
+                        <Sparkline
+                          data={flatTrend(riskPct)}
+                          width={90}
+                          height={20}
+                        />
+                      </td>
+                      <td className="max-w-xs truncate px-4 py-3 text-ink-2">
+                        {recommendation}
+                      </td>
+                      {dense && (
+                        <td className="px-4 py-3 text-right text-xs">
+                          {regionLabel}
+                        </td>
+                      )}
+                      {dense && (
+                        <td className="tabular px-4 py-3 text-right text-xs text-ink-2">
+                          {updatedLabel}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </Panel>
+        </div>
+      )}
+    </>
   )
 }
